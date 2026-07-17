@@ -1,5 +1,8 @@
 version: '3.8'
 
+volumes:
+  linklik_data:
+
 services:
   linklik:
     build:
@@ -8,9 +11,9 @@ services:
     container_name: linklik-app
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8080"
     volumes:
-      - ./data:/app/data
+      - linklik_data:/app/data
     environment:
       - PORT=8080
       - DB_PATH=/app/data/linklik.db
