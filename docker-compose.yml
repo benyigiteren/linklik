@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  linklik:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linklik-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8080
+      - DB_PATH=/app/data/linklik.db
+      - BASE_URL=http://localhost:8080
+      # Güvenlik: JWT_SECRET (eskiden yanlış ad JWT_SECRET_KEY idi, uygulama okuyamıyordu;
+      # her restart'ta rastgele anahtar üretiyordu). Min 32 byte olmalı.
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET zorunlu, en az 32 karakter olmali}
+      # Çerez Secure bayrağı: HTTPS sonlandırmalı proxy arkasında true ayarlayın.
+      - COOKIE_SECURE=false
+    # Güvenlik sertleştirme
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"

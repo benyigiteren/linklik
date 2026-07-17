@@ -1,0 +1,33 @@
+# Binaries and executable files
+/linklik
+/linklik.exe
+/server
+/server.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# SQLite Database files
+/linklik.db
+/linklik.db-wal
+/linklik.db-shm
+*.db
+*.db-wal
+*.db-shm
+
+# Docker volume data
+/data/
+
+# Environment configuration
+.env
+.env.local
+
+# Editor and agent workspace files
+.vscode/
+.idea/
+.agents/
+.kiro/
+.gemini/
+*.log

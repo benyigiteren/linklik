@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giriş Yap - Linklik</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <!-- Phosphor Icons Light CDN -->
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+  <style>
+    /* Şifre Kapsayıcısı */
+    .password-wrapper {
+      position: relative;
+    }
+    
+    .password-wrapper input {
+      padding-right: 48px;
+    }
+
+    .eye-btn {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-smooth);
+      padding: 4px;
+      font-size: 1.2rem;
+    }
+
+    .eye-btn:hover {
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body class="light-theme">
+  <script>
+    (function() {
+      const cachedTheme = localStorage.getItem('theme');
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      const theme = cachedTheme || systemTheme;
+      if (theme === 'dark') {
+        document.body.classList.replace('light-theme', 'dark-theme');
+      }
+    })();
+  </script>
+  <div class="container auth-wrapper" style="min-height: 100vh;">
+    <div class="glass-card auth-card" style="padding: 3rem 2.5rem; max-width: 440px;">
+      <div class="auth-header">
+        <div style="display: flex; justify-content: center; margin-bottom: 1.5rem;">
+          <img src="/static/img/Linklik-siyah.png" alt="Linklik Logo" class="auth-logo" style="height: 75px; width: auto; object-fit: contain;">
+        </div>
+        <h2 style="font-size: 1.6rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Giriş Yap</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">Hesabınızla yönetim paneline erişin.</p>
+      </div>
+
+      <div id="alertBox"></div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="username">Kullanıcı Adı</label>
+          <input type="text" id="username" class="form-control" placeholder="Kullanıcı adınızı yazın" required autofocus autocomplete="username">
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Şifre</label>
+          <div class="password-wrapper">
+            <input type="password" id="password" class="form-control" placeholder="Şifrenizi yazın" required autocomplete="current-password">
+            <button type="button" class="eye-btn" onclick="togglePasswordVisibility('password', this)" title="Şifreyi Göster/Gizle">
+              <i class="ph-light ph-eye" id="eye-icon"></i>
+            </button>
+          </div>
+        </div>
+        
+        <button type="submit" id="loginBtn" class="btn btn-primary" style="width: 100%; margin-top: 1rem; height: 46px;">
+          Giriş Yap
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Şifre görünürlüğünü aç/kapat
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const icon = btn.querySelector('#eye-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'ph-light ph-eye-closed';
+        btn.style.color = "var(--text-primary)";
+      } else {
+        input.type = 'password';
+        icon.className = 'ph-light ph-eye';
+        btn.style.color = "#9ca3af";
+      }
+    }
+
+    // Kurulum yapılmış mı kontrol et
+    async function checkSetup() {
+      try {
+        const res = await fetch('/api/v1/setup/status');
+        const data = await res.json();
+        if (data.success && data.data.setup_required) {
+          window.location.href = '/setup';
+        }
+      } catch (err) {
+        console.error("Kurulum durumu sorgulanamadı", err);
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const alertBox = document.getElementById('alertBox');
+      const loginBtn = document.getElementById('loginBtn');
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      alertBox.innerHTML = '';
+      loginBtn.disabled = true;
+      loginBtn.innerText = 'Giriş Yapılıyor...';
+
+      try {
+        const res = await fetch('/api/v1/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          alertBox.innerHTML = `
+            <div class="alert alert-success">
+              Giriş başarılı! Yönlendiriliyorsunuz...
+            </div>
+          `;
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1000);
+        } else {
+          alertBox.innerHTML = `
+            <div class="alert alert-danger">
+              ${data.error || 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.'}
+            </div>
+          `;
+          loginBtn.disabled = false;
+          loginBtn.innerText = 'Giriş Yap';
+        }
+      } catch (err) {
+        alertBox.innerHTML = `
+          <div class="alert alert-danger">
+            Sunucuya bağlanılamadı. Lütfen tekrar deneyin.
+          </div>
+        `;
+        loginBtn.disabled = false;
+        loginBtn.innerText = 'Giriş Yap';
+      }
+    }
+
+    checkSetup();
+
+    // Tema kontrolü ve logo güncellemesi
+    function initPageTheme() {
+      const cachedTheme = localStorage.getItem('theme');
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      const theme = cachedTheme || systemTheme;
+      
+      const logo = document.querySelector('.auth-logo');
+      if (logo) {
+        logo.src = theme === 'dark' ? '/static/img/Linklik-beyaz.png' : '/static/img/Linklik-siyah.png';
+      }
+      
+      // Sistem teması değişikliklerini dinle
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        if (!localStorage.getItem('theme')) {
+          const newTheme = e.matches ? 'dark' : 'light';
+          if (newTheme === 'dark') {
+            document.body.classList.replace('light-theme', 'dark-theme');
+          } else {
+            document.body.classList.replace('dark-theme', 'light-theme');
+          }
+          if (logo) {
+            logo.src = newTheme === 'dark' ? '/static/img/Linklik-beyaz.png' : '/static/img/Linklik-siyah.png';
+          }
+        }
+      });
+    }
+    initPageTheme();
+  </script>
+</body>
+</html>

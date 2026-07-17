@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yönetim Paneli - Linklik</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <!-- Phosphor Icons Light CDN (Pre-approved) -->
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="light-theme">
+  <script>
+    (function() {
+      const cachedTheme = localStorage.getItem('theme');
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      const theme = cachedTheme || systemTheme;
+      if (theme === 'dark') {
+        document.body.classList.replace('light-theme', 'dark-theme');
+      }
+    })();
+  </script>
+  <!-- Kopyalandı Bildirimi (Toast) -->
+  <div id="toast" class="toast">Kopyalandı!</div>
+
+  <!-- Ana Uygulama Düzeni (Sidebar + Main Content) -->
+  <div class="app-layout">
+    
+    <!-- Sol Menü (Sidebar - Siyah Minimalist Görünüm) -->
+    <aside id="appSidebar" class="sidebar">
+      <div class="sidebar-brand-wrapper">
+        <a href="/" class="brand" style="display: block;">
+          <img src="/static/img/Linklik-beyaz.png" alt="Linklik Logo" class="sidebar-logo" style="height: 75px; max-height: 80px; width: auto; object-fit: contain; margin-bottom: 0.5rem;">
+        </a>
+        <button class="sidebar-close-btn" onclick="toggleSidebar()">
+          <i class="ph-light ph-x"></i>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" onclick="switchTab('shortener')" id="tabBtn-shortener">
+          <i class="ph-light ph-link nav-icon"></i> Link Kısaltıcı
+        </button>
+        <button class="nav-item" onclick="switchTab('analytics')" id="tabBtn-analytics">
+          <i class="ph-light ph-chart-bar nav-icon"></i> Detaylı Analiz
+        </button>
+        <button class="nav-item" onclick="switchTab('api')" id="tabBtn-api">
+          <i class="ph-light ph-key nav-icon"></i> API Bağlantısı
+        </button>
+        {{if eq .User.Role "superadmin"}}
+        <button class="nav-item" onclick="switchTab('users')" id="tabBtn-users">
+          <i class="ph-light ph-users nav-icon"></i> Kullanıcı Yönetimi
+        </button>
+        {{end}}
+      </nav>
+
+      <!-- Sidebar Alt Bilgi (Geliştirilmiş Profil Widget'ı) -->
+      <div class="sidebar-footer">
+        <div class="user-profile-widget">
+          <div class="user-avatar" id="sidebarUserAvatar">U</div>
+          <div class="user-profile-info">
+            <span class="user-name" title="{{.User.Username}}">{{.User.Username}}</span>
+            <span class="user-role-text">{{if eq .User.Role "superadmin"}}Yönetici{{else}}Üye{{end}}</span>
+          </div>
+          <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+            <button class="settings-icon-btn" onclick="openProfileModal()" title="Profil Ayarları">
+              <i class="ph-light ph-gear"></i>
+            </button>
+            <button class="logout-icon-btn" onclick="handleLogout()" title="Güvenli Çıkış">
+              <i class="ph-light ph-sign-out"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Sidebar Mobil Karartma Arka Planı -->
+    <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Sağ Taraf (Ana İçerik) -->
+    <main class="app-main">
+      
+      <!-- Ana Header (Tema Seçici ve Sayfa Başlığı) -->
+      <header class="main-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <button class="mobile-menu-trigger" onclick="toggleSidebar()">
+            <i class="ph-light ph-list"></i>
+          </button>
+          <div class="page-title" id="pageTitle">Link Kısaltıcı</div>
+        </div>
+        
+        <!-- Sağ Üst Tema Seçici Buton -->
+        <button class="theme-toggle-btn" onclick="toggleTheme()" title="Temayı Değiştir">
+          <i class="ph-light ph-moon" id="themeToggleIcon"></i>
+        </button>
+      </header>
+
+      <!-- 1. SEKME: LİNK KISALTICI VE LİSTE -->
+      <div class="tab-content active" id="content-shortener">
+        
+        <!-- Ortalı / Büyük Link Kısaltma Alanı (Hero Panel) -->
+        <div class="shorten-hero-wrapper">
+          <div class="shorten-hero-content">
+            <h1 class="shorten-hero-title">Bir Bağlantıyı Kısaltın</h1>
+            <p class="shorten-hero-subtitle">Uzun adreslerinizi minimalist, sınırlanabilir ve izlenebilir linklere dönüştürün.</p>
+            
+            <div class="glass-card shorten-hero-card">
+              <div id="shortenAlert"></div>
+              <form id="shortenForm" onsubmit="handleShorten(event)" class="shorten-hero-form">
+                <div class="form-group input-url-group">
+                  <label for="originalUrl">Kısaltılacak Orijinal URL</label>
+                  <input type="text" id="originalUrl" class="form-control" placeholder="example.com" required>
+                </div>
+                <div class="form-group input-alias-group">
+                  <label for="customAlias">Özel Takma Ad (Alias)</label>
+                  <div class="alias-input-wrapper">
+                    <span class="alias-prefix" id="aliasDomainPrefix">domain.com/</span>
+                    <input type="text" id="customAlias" class="form-control alias-field" placeholder="ozel-ad">
+                  </div>
+                </div>
+                <div class="form-group input-limit-group">
+                  <label for="maxClicks">Tıklama Sınırı (Limit)</label>
+                  <input type="number" id="maxClicks" class="form-control" placeholder="0 = Sınırsız" min="0" value="0">
+                </div>
+                <button type="submit" id="shortenBtn" class="btn btn-primary hero-shorten-btn">Kısalt</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hızlı İstatistik Paneli -->
+        <section class="stats-grid">
+          <div class="glass-card stat-card">
+            <div class="stat-icon"><i class="ph-light ph-link"></i></div>
+            <div>
+              <div class="stat-value" id="statsTotalLinks">0</div>
+              <div class="stat-label">Kısaltılmış Link</div>
+            </div>
+          </div>
+          <div class="glass-card stat-card">
+            <div class="stat-icon"><i class="ph-light ph-eye"></i></div>
+            <div>
+              <div class="stat-value" id="statsTotalClicks">0</div>
+              <div class="stat-label">Toplam Tıklanma</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Linkler Tablosu -->
+        <div class="glass-card">
+          <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">Linkleriniz</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kısa Link</th>
+                  <th>Asıl URL</th>
+                  <th>Tıklanma / Limit</th>
+                  <th>Oluşturulma</th>
+                  <th style="text-align: right;">İşlemler</th>
+                </tr>
+              </thead>
+              <tbody id="linksTableBody">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Yükleniyor...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. SEKME: DETAYLI ANALİZ -->
+      <div class="tab-content" id="content-analytics">
+        <div class="glass-card" style="margin-bottom: 1.5rem;">
+          <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); margin-bottom: 1.25rem;">Linkleriniz ve Analiz</h3>
+          
+          <!-- Üst Alan: Seçim için Link Listesi (Tablolu) -->
+          <div class="table-wrapper" style="margin-bottom: 2rem; max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+            <table>
+              <thead>
+                <tr style="background-color: var(--bg-primary);">
+                  <th>Kısa Kod</th>
+                  <th>Orijinal URL</th>
+                  <th>Görüntülenme / Sınır</th>
+                  <th style="text-align: right;">Seçim</th>
+                </tr>
+              </thead>
+              <tbody id="analyticsLinksTableBody">
+                <tr>
+                  <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Yükleniyor...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Alt Alan: Analitik Detay Panelleri (Eğer Seçildiyse Görünür) -->
+          <div id="analyticsDetailsWrapper" class="hidden">
+            <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); margin-bottom: 1.25rem;" id="selectedLinkTitle">Analiz Raporu</h3>
+
+            <!-- Çizgi Grafik -->
+            <div style="position: relative; height:280px; width:100%; margin-bottom: 2rem; background: var(--bg-secondary); border-radius: 12px; padding: 16px; border:1px solid var(--border-color);">
+              <canvas id="clicksChart"></canvas>
+            </div>
+
+            <!-- Detay Kırılımları Bento Izgarası -->
+            <div class="analytics-summary-grid">
+              <div class="analytics-summary-box">
+                <h4>Coğrafi Dağılım (Ülkeler)</h4>
+                <div id="countryList">
+                  <div class="analytics-list-item"><span style="color:var(--text-muted);">Veri yok</span></div>
+                </div>
+              </div>
+              <div class="analytics-summary-box">
+                <h4>Yönlendiriciler (Referrers)</h4>
+                <div id="referrerList">
+                  <div class="analytics-list-item"><span style="color:var(--text-muted);">Veri yok</span></div>
+                </div>
+              </div>
+              <div class="analytics-summary-box">
+                <h4>Tarayıcılar (Browsers)</h4>
+                <div id="browserList">
+                  <div class="analytics-list-item"><span style="color:var(--text-muted);">Veri yok</span></div>
+                </div>
+              </div>
+              <div class="analytics-summary-box">
+                <h4>İşletim Sistemleri (OS)</h4>
+                <div id="osList">
+                  <div class="analytics-list-item"><span style="color:var(--text-muted);">Veri yok</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Boş Durum Ekranı (Empty State) -->
+          <div id="analyticsEmptyState" style="text-align:center; padding: 3rem 1rem; color:var(--text-secondary);">
+            <div style="font-size:2.5rem; margin-bottom:0.75rem;"><i class="ph-light ph-chart-bar" style="color: var(--text-muted);"></i></div>
+            <h4>Analiz Edilecek Linki Seçin</h4>
+            <p style="font-size:0.85rem; max-width:400px; margin: 6px auto 0 auto; color:var(--text-secondary);">
+              İstatistik detaylarını yüklemek için yukarıdaki listeden analiz etmek istediğiniz linkin yanındaki "Seç ve İncele" butonuna tıklayabilirsiniz.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. SEKME: API ENTEGRASYONU -->
+      <div class="tab-content" id="content-api">
+        <!-- API Bilgi Kartı -->
+        <div class="glass-card" style="margin-bottom: 1.5rem;">
+          <h3 style="font-weight: 700; margin-bottom: 1rem; font-size: 1.2rem; color: var(--text-primary);">API Bağlantı Anahtarınız</h3>
+          <p style="color:var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
+            Dışarıdan sistemimize bağlanmak, kendi otomasyonlarınızı veya yapay zeka ajanlarınızı (AI Agents) entegre etmek için aşağıdaki anahtarı kullanabilirsiniz. Her istekte <code>X-API-KEY</code> başlığı altında gönderilmelidir.
+          </p>
+
+          <div style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1.5rem; border-radius:12px; margin-bottom:1.5rem;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:var(--text-primary);">X-API-KEY Değeri</label>
+              <div class="api-key-actions-row" style="display: flex; gap: 8px; align-items: center; margin-top:8px;">
+                <input type="password" id="apiKeyVal" class="form-control" style="font-family: monospace; font-size: 0.9rem; height:42px; background:var(--bg-secondary);" value="{{.User.APIKey}}" readonly>
+                <div class="api-key-buttons" style="display: flex; gap: 8px; flex-shrink: 0;">
+                  <button class="btn btn-secondary" style="height:42px; gap:6px;" onclick="toggleApiKey()">
+                    <i class="ph-light ph-eye"></i> Göster/Gizle
+                  </button>
+                  <button class="btn btn-secondary" style="height:42px; gap:6px;" onclick="copyApiKey()">
+                    <i class="ph-light ph-copy"></i> Kopyala
+                  </button>
+                  <button class="btn btn-danger" style="height:42px; gap:6px;" onclick="regenerateApiKey()">
+                    <i class="ph-light ph-arrows-clockwise"></i> Yenile
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kullanım Dokümantasyonu -->
+        <div class="glass-card">
+          <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">Harici API Kullanım Örneği</h3>
+          
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">1. Link Kısaltma (cURL Örneği)</h4>
+          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
+curl -X POST {{.BaseURL}}/api/v1/links \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>" \
+  -d '{
+    "url": "https://google.com",
+    "custom_alias": "arama-motoru",
+    "max_clicks": 100
+  }'</pre>
+  
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">2. Link Düzenleme (cURL Örneği)</h4>
+          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
+curl -X PUT {{.BaseURL}}/api/v1/links/arama-motoru \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>" \
+  -d '{
+    "url": "https://google.com/search",
+    "custom_alias": "google-arama",
+    "max_clicks": 250
+  }'</pre>
+  
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">3. Detaylı Yardım Dokümantasyonu (cURL Örneği)</h4>
+          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
+curl -X GET {{.BaseURL}}/api/v1/help \
+  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>"</pre>
+ 
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">4. Analiz Verisi Çekme (cURL Örneği)</h4>
+          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary);">
+curl -X GET {{.BaseURL}}/api/v1/analytics/google-arama \
+  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>"</pre>
+        </div>
+      </div>
+
+      <!-- 4. SEKME: KULLANICI YÖNETİMİ (Sadece Superadmin) -->
+      {{if eq .User.Role "superadmin"}}
+      <div class="tab-content" id="content-users">
+        <div class="dashboard-grid">
+          <!-- Üye Ekleme -->
+          <div class="glass-card" style="height: fit-content;">
+            <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">Yeni Üye Ekle</h3>
+            <div id="userAlert"></div>
+            <form id="createUserForm" onsubmit="handleCreateUser(event)">
+              <div class="form-group">
+                <label for="newUsername">Kullanıcı Adı</label>
+                <input type="text" id="newUsername" class="form-control" placeholder="Kullanıcı adı yazın" required autocomplete="username">
+              </div>
+              <div class="form-group" style="position:relative;">
+                <label for="newPassword">Şifre</label>
+                <div style="position:relative;">
+                  <input type="password" id="newPassword" class="form-control" placeholder="En az 6 karakter" required autocomplete="new-password">
+                  <button type="button" class="eye-btn" style="position:absolute; right:14px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9ca3af; cursor:pointer;" onclick="togglePasswordVisibility('newPassword', this)">
+                    <i class="ph-light ph-eye" id="eye-icon-new"></i>
+                  </button>
+                </div>
+              </div>
+              <button type="submit" id="createUserBtn" class="btn btn-primary" style="width: 100%; height:46px; margin-top:1rem;">Üyeyi Kaydet</button>
+            </form>
+          </div>
+
+          <!-- Üye Listesi -->
+          <div class="glass-card">
+            <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">Sistem Üyeleri</h3>
+            <div class="table-wrapper">
+              <table class="users-table">
+                <thead>
+                  <tr>
+                    <th>Kullanıcı Adı</th>
+                    <th>Rol</th>
+                    <th style="text-align: right;">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                  <!-- JS ile yüklenecek -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{end}}
+
+    </main>
+  </div>
+
+  <!-- LİNK DÜZENLEME MODALI -->
+  <div id="editLinkModal" class="modal">
+    <div class="glass-card modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 style="font-weight: 700; color: var(--text-primary);">Bağlantıyı Düzenle</h3>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <div id="editAlert"></div>
+      <form id="editLinkForm" onsubmit="handleUpdateLink(event)">
+        <input type="hidden" id="editOldShortCode">
+        
+        <div class="form-group">
+          <label for="editOriginalUrl">Hedef URL (Orijinal)</label>
+          <input type="text" id="editOriginalUrl" class="form-control" required placeholder="https://example.com">
+        </div>
+        
+        <div class="form-group">
+          <label for="editCustomAlias">Kısa Kod / Takma Ad (Alias)</label>
+          <div class="alias-input-wrapper">
+            <span class="alias-prefix" id="editAliasDomainPrefix">domain.com/</span>
+            <input type="text" id="editCustomAlias" class="form-control alias-field" placeholder="takma-ad">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="editMaxClicks">Maksimum Tıklanma Limiti</label>
+          <input type="number" id="editMaxClicks" class="form-control" min="0" placeholder="0 = Sınırsız">
+          <small style="color:var(--text-secondary); font-size:0.75rem; margin-top:4px; display:block;">Tıklama sayısı bu sınıra ulaştığında bağlantı pasifleşir.</small>
+        </div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeEditModal()">İptal</button>
+          <button type="submit" id="editSaveBtn" class="btn btn-primary">Değişiklikleri Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PROFİL AYARLARI MODALI -->
+  <div id="profileModal" class="modal">
+    <div class="glass-card modal-content" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3 style="font-weight: 700; color: var(--text-primary);">Profil Ayarları</h3>
+        <button class="modal-close" onclick="closeProfileModal()">&times;</button>
+      </div>
+      <div id="profileAlert"></div>
+      <form id="profileForm" onsubmit="handleUpdateProfile(event)">
+        <div class="form-group">
+          <label for="profileUsername">Kullanıcı Adı</label>
+          <input type="text" id="profileUsername" class="form-control" required value="{{.User.Username}}">
+        </div>
+        <div class="form-group">
+          <label for="profilePassword">Yeni Şifre (Değiştirmek istemiyorsanız boş bırakın)</label>
+          <div style="position:relative;">
+            <input type="password" id="profilePassword" class="form-control" placeholder="En az 6 karakter">
+            <button type="button" class="eye-btn" style="position:absolute; right:14px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9ca3af; cursor:pointer;" onclick="togglePasswordVisibility('profilePassword', this)">
+              <i class="ph-light ph-eye" id="eye-icon-profile"></i>
+            </button>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">İptal</button>
+          <button type="submit" id="profileSaveBtn" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript Kodları -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
