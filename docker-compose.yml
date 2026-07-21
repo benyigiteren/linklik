@@ -5,6 +5,7 @@ volumes:
 
 services:
   linklik:
+    image: ghcr.io/benyigiteren/linklik:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile

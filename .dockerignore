@@ -1,0 +1,26 @@
+.git
+.github
+.agents
+.gemini
+.kiro
+.vscode
+.idea
+
+# Local secrets and persistent state
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+data
+
+# Local build outputs and logs
+linklik
+linklik.exe
+server
+server.exe
+*.log
+
+# Documentation and editor artifacts are not needed at runtime
+README.md
+readmegorsel.png

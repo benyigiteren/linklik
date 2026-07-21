@@ -126,21 +126,47 @@ SQLite varsayılan olarak her yazma işleminde tüm veritabanı dosyasını kili
 
 ## 💻 Kurulum ve Çalıştırma
 
-### 1. Docker Compose ile Hızlı Başlatma (Tavsiye Edilen)
+### 1. GitHub Container Registry ile Çalıştırma
 
-En hızlı ve zahmetsiz kurulum yöntemi Docker Compose kullanmaktır. Sisteminizde Docker ve Docker Compose yüklü olması yeterlidir.
+Her `main` dalı gönderiminde image, GitHub Container Registry'ye `ghcr.io/benyigiteren/linklik:latest` etiketiyle; sürüm etiketi gönderimlerinde de sürüm etiketiyle yayımlanır. İlk yayımdan sonra image paketinin GitHub'da **Public** görünür olduğundan emin olun.
 
 ```bash
-# Projeyi başlatın (arka planda çalışacak şekilde)
-docker-compose up -d
-
-# Logları takip etmek isterseniz
-docker-compose logs -f
+docker run --detach \
+  --name linklik \
+  --restart unless-stopped \
+  --publish 8080:8080 \
+  --volume linklik_data:/app/data \
+  --env JWT_SECRET='en-az-32-karakterlik-guclu-bir-gizli-anahtar' \
+  --env BASE_URL='https://linklik.example.com' \
+  --env COOKIE_SECURE=true \
+  ghcr.io/benyigiteren/linklik:latest
 ```
 
-Uygulama otomatik olarak `http://localhost:8080` adresinde çalışacaktır. Verileriniz, proje klasörü altındaki `./data` klasöründe kalıcı olarak saklanır.
+ARM64 ve AMD64 Linux sistemleri desteklenir. Kendi image sürümünüzü seçmek için `latest` yerine örneğin `v1.0.0` kullanın.
 
-### 2. Yerel Olarak Çalıştırma (Go ile)
+### 2. Docker Compose ile Hızlı Başlatma (Tavsiye Edilen)
+
+GitHub Container Registry'deki image'i kullanmak için:
+
+```bash
+docker compose pull
+docker compose up -d --no-build
+```
+
+Yerel kaynak kodundan image derlemek için `docker compose up -d --build` komutunu kullanın.
+
+`JWT_SECRET` değerini Compose çalıştırmadan önce ortam değişkeni olarak ayarlayın; en az 32 karakter olmalıdır.
+
+```bash
+# Linux/macOS
+export JWT_SECRET='en-az-32-karakterlik-guclu-bir-gizli-anahtar'
+
+# PowerShell
+$env:JWT_SECRET = 'en-az-32-karakterlik-guclu-bir-gizli-anahtar'
+```
+
+
+### 3. Yerel Olarak Çalıştırma (Go ile)
 
 Bilgisayarınızda Go (1.26 veya üzeri) yüklü olmalıdır.
 
@@ -154,12 +180,12 @@ go run cmd/server/main.go
 
 Sunucu varsayılan olarak `http://localhost:8080` adresinde çalışmaya başlayacaktır.
 
-### 3. Veritabanını Sıfırlama (Yeniden Kurulum)
+### 4. Veritabanını Sıfırlama (Yeniden Kurulum)
 
 Sistemi sıfırlamak, tüm verileri silmek ve ilk kurulum ekranına (`/setup`) geri dönmek için:
 
 1. Çalışan uygulamayı veya Docker konteynerini durdurun.
-2. Proje kök dizininde (veya Docker kullanıyorsanız `./data` klasörü içinde) yer alan şu dosyaları silin:
+2. Yerel çalıştırmada proje kökündeki, Docker Compose çalıştırmasında ise `linklik_data` Docker volume'ündeki şu dosyaları silin:
    - `linklik.db`
    - `linklik.db-wal` (varsa)
    - `linklik.db-shm` (varsa)
