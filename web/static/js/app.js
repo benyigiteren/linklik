@@ -144,12 +144,12 @@ function togglePasswordVisibility(inputId, btn) {
   
   if (input.type === 'password') {
     input.type = 'text';
-    icon.className = "ph-light ph-eye-closed";
+    icon.className = "ph-light ph-eye-slash";
     btn.style.color = "var(--text-primary)";
   } else {
     input.type = 'password';
     icon.className = "ph-light ph-eye";
-    btn.style.color = "#9ca3af";
+    btn.style.color = "var(--text-muted)";
   }
 }
 
