@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"linklik/internal/config"
 	"linklik/internal/db"
 	"linklik/internal/handler"
@@ -22,10 +23,14 @@ import (
 )
 
 func main() {
+	mcpMode := flag.Bool("mcp", false, "MCP stdio modunda çalıştır (Claude Desktop vb. için)")
+	mcpAPIKey := flag.String("api-key", "", "MCP stdio modu için kullanılacak X-API-KEY")
+	flag.Parse()
+
 	// 1. Konfigürasyonu Yükle
 	config.LoadConfig()
 
-	// 2. Veritabanını Başlat (SQLite & WAL Modu)
+	// 2. Veritabanını Başlat (SQLite & WAL Modu & Otomatik Göçler)
 	if err := db.InitDB(config.GlobalConfig.DBPath); err != nil {
 		log.Fatalf("Veritabanı başlatma hatası: %v", err)
 	}
@@ -36,34 +41,53 @@ func main() {
 	linkRepo := repository.NewLinkRepository()
 	analyticsRepo := repository.NewAnalyticsRepository()
 
-	// 4. Servis Katmanlarını Oluştur
+	// 4. Servis Katmanlarını Oluştur (Worker Pool başlatılır)
 	userService := service.NewUserService(userRepo)
 	linkService := service.NewLinkService(linkRepo)
 	analyticsService := service.NewAnalyticsService(analyticsRepo)
 
-	// 5. Handler (İstek Karşılayıcı) Katmanlarını Oluştur
+	// 5. Handler Katmanlarını Oluştur
 	authHandler := handler.NewAuthHandler(userService)
 	linkHandler := handler.NewLinkHandler(linkService)
 	analyticsHandler := handler.NewAnalyticsHandler(analyticsService, linkService)
 	redirectHandler := handler.NewRedirectHandler(linkService, analyticsService)
 	uiHandler := handler.NewUIHandler(userService)
+	qrHandler := handler.NewQRHandler(linkService)
+	healthHandler := handler.NewHealthHandler(db.Db)
+	mcpHandler := handler.NewMCPHandler(linkService, analyticsService, userService)
+
+	// Eğer --mcp parametresi verilmişse stdio üzerinden çalıştır
+	if *mcpMode {
+		key := *mcpAPIKey
+		if key == "" {
+			key = os.Getenv("LINKLIK_API_KEY")
+		}
+		user, err := userService.GetUserByAPIKey(key)
+		if err != nil || user == nil {
+			log.Fatalf("[MCP Stdio] Geçersiz veya eksik API anahtarı. Lütfen --api-key veya LINKLIK_API_KEY belirtin.")
+		}
+		log.Printf("[MCP Stdio] Kullanıcı doğrulandı: %s. Stdio dinleniyor...", user.Username)
+		mcpHandler.RunStdio(user)
+		return
+	}
 
 	// 6. Chi Router ve Middleware Yapılandırması
 	r := chi.NewRouter()
 
 	r.Use(chi_middleware.RequestID)
-	// Güvenlik: chi v5 RealIP kullanımdan kaldırıldı (GHSA-3fxj-6jh8-hvhx) ve IP
-	// sahteciliğine açıktı. Bunun yerine ClientIPFromRemoteAddr kullanırız (raw
-	// TCP PeerAddr). Reverse-proxy arkasında çalışıyorsanız ClientIPFromXFFTrustedProxies
-	// kullanın; yoksa saldırgan X-Forwarded-For ile IP'yi sahteleyebilir.
-	r.Use(chi_middleware.ClientIPFromRemoteAddr)
+	// Güvenlik & Proxy: Docker, Cloudflare ve Nginx arkasında gerçek istemci IP tespiti
+	r.Use(middleware.TrustedProxyMiddleware)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(chi_middleware.Logger)
 	r.Use(chi_middleware.Recoverer)
 	r.Use(middleware.CORS)
 
-	// Genel gövde boyutu kısıtı (1 MiB) — çalışma zamanı ileti DoS'u için
+	// Genel gövde boyutu kısıtı (1 MiB)
 	r.Use(middleware.MaxBodySize(1 << 20))
+
+	// Sistem Sağlık Uç Noktaları (Docker/K8s/Load Balancer için)
+	r.Get("/healthz", healthHandler.Healthz)
+	r.Get("/readyz", healthHandler.Readyz)
 
 	// Statik Dosyaları Gömülü Dosya Sisteminden Sun (CSS, JS)
 	r.Handle("/static/*", http.FileServer(http.FS(web.Assets)))
@@ -78,26 +102,36 @@ func main() {
 	// ==========================================
 	// 8. GENEL VE MİSAFİR API ROTALARI
 	// ==========================================
-	// Güvenlik: Setup ve Login uç noktalarına sıkı hız limiti (brute-force / setup race engeli)
 	r.With(middleware.RateLimit(5, time.Minute)).Post("/api/v1/setup", authHandler.Setup)
-	// Güvenlik: kimlik doğrulamasız durum sorgusu da DB'ye iner; sıkıştırma saldırılarına karşı limitli
 	r.With(middleware.RateLimit(60, time.Minute)).Get("/api/v1/setup/status", authHandler.SetupStatus)
 	r.With(middleware.RateLimit(10, time.Minute)).Post("/api/v1/login", authHandler.Login)
 	r.Post("/api/v1/logout", authHandler.Logout)
 
+	// QR Kod Uç Noktası (Önbelleklenebilir ve genel/erişilebilir)
+	r.Get("/api/v1/links/{short_code}/qr", qrHandler.GenerateQR)
+
 	// ==========================================
-	// 9. YETKİLİ API ROTALARI (API-Key VEYA Oturum Destekli)
+	// 9. MCP (MODEL CONTEXT PROTOCOL) ROTALARI
 	// ==========================================
 	r.Group(func(r chi.Router) {
-		// Hem API Key ile harici ajanlar hem de panelden JWT ile erişimi destekler
+		r.Get("/mcp/sse", mcpHandler.HandleSSE)
+		r.Post("/mcp/message", mcpHandler.HandleMessage)
+		r.Post("/mcp", mcpHandler.HandleMessage)
+	})
+
+	// ==========================================
+	// 10. YETKİLİ API ROTALARI (API-Key VEYA Oturum Destekli)
+	// ==========================================
+	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthEither(userService, true))
-		// Kimlik doğrulanmış istemciler için daha geniş limit (link spam engeli)
 		r.Use(middleware.RateLimit(100, time.Minute))
 
 		// Link İşlemleri
 		r.Post("/api/v1/links", linkHandler.Shorten)
 		r.Get("/api/v1/links", linkHandler.GetLinks)
 		r.Put("/api/v1/links/{short_code}", linkHandler.Update)
+		r.Patch("/api/v1/links/{short_code}/toggle", linkHandler.ToggleActive)
+		r.Post("/api/v1/links/{short_code}/reset-stats", linkHandler.ResetStats)
 		r.Delete("/api/v1/links/{short_code}", linkHandler.DeleteLink)
 
 		// Analitik Raporu
@@ -114,7 +148,7 @@ func main() {
 	})
 
 	// ==========================================
-	// 10. SUPERADMIN YETKİLİ ADMİN ROTALARI
+	// 11. SUPERADMIN YETKİLİ ADMİN ROTALARI
 	// ==========================================
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthEither(userService, true))
@@ -127,15 +161,12 @@ func main() {
 	})
 
 	// ==========================================
-	// 11. YÖNLENDİRME ROTASI (HER ŞEYİN EN ALTINDA OLMALI)
+	// 12. ŞİFRE DOĞRULAMA VE YÖNLENDİRME ROTALARI
 	// ==========================================
-	// Güvenlik: Yönlendirme rotası kimlik doğrulamasızdır ve her istekte DB yazması +
-	// asenkron analitik goroutine'i tetikler. IP başına 300/dk limiti; meşru trafiği
-	// (NAT arkası kurumsal tıklamalar dahil) etkilemeden click-fraud / yazma
-	// amplifikasyonu (DoS) saldırılarını keser.
+	r.With(middleware.RateLimit(30, time.Minute)).Post("/{short_code}/verify-password", redirectHandler.VerifyPassword)
 	r.With(middleware.RateLimit(300, time.Minute)).Get("/{short_code}", redirectHandler.Redirect)
 
-	// 12. HTTP Sunucusunu Başlat ve Graceful Shutdown Yapılandır
+	// 13. HTTP Sunucusunu Başlat ve Graceful Shutdown Yapılandır
 	serverAddr := ":" + config.GlobalConfig.Port
 	srv := &http.Server{
 		Addr:         serverAddr,
@@ -145,7 +176,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Arka planda sunucuyu başlat
 	go func() {
 		scheme := "http"
 		if config.GlobalConfig.TLSCertPath != "" && config.GlobalConfig.TLSKeyPath != "" {
@@ -162,19 +192,21 @@ func main() {
 		}
 	}()
 
-	// Kapatma sinyallerini dinle (SIGINT, SIGTERM)
+	// Kapatma sinyallerini dinle
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	log.Println("Sunucu kapatılıyor...")
 
-	// 5 saniye içinde kapatma garantisi ver
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Sunucu zorla kapatıldı: %v", err)
+		log.Printf("HTTP sunucusu kapatma uyarısı: %v", err)
 	}
+
+	// Analitik iş kuyruğunu tüket ve güvenle kapat
+	analyticsService.Shutdown(ctx)
 
 	log.Println("Sunucu güvenli bir şekilde kapatıldı.")
 }

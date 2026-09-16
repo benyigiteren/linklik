@@ -139,3 +139,10 @@ func (r *AnalyticsRepository) GetStatsByLinkID(linkID int64) (*model.LinkStats, 
 
 	return stats, nil
 }
+
+// DeleteByLinkID belirli bir linke ait tüm analitik kayıtlarını siler.
+func (r *AnalyticsRepository) DeleteByLinkID(linkID int64) error {
+	query := `DELETE FROM analytics WHERE link_id = ?`
+	_, err := r.db.Exec(query, linkID)
+	return err
+}

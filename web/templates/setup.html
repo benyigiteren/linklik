@@ -8,24 +8,31 @@
   <!-- Phosphor Icons Light CDN -->
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
   <style>
-    /* Kuruluma özel siyah/beyaz premium düzen */
+    /* Kuruluma özel düzen */
     .setup-container {
       display: grid;
       grid-template-columns: 1.15fr 1fr;
       gap: 3.5rem;
-      max-width: 980px;
+      max-width: 1020px;
       width: 100%;
       align-items: center;
+      margin: 3.5rem auto 2rem;
     }
     
-    @media (max-width: 850px) {
+    @media (max-width: 900px) {
       .setup-container {
         grid-template-columns: 1fr;
         gap: 2rem;
         padding: 1rem;
+        margin-top: 4.5rem;
       }
       .setup-info-panel {
         display: none;
+      }
+      .setup-header-bar {
+        left: 1rem !important;
+        right: 1rem !important;
+        top: 1rem !important;
       }
     }
 
@@ -35,50 +42,59 @@
 
     .setup-info-panel h1 {
       font-size: 2.75rem;
-      font-weight: 700;
+      font-weight: 800;
       line-height: 1.15;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
       color: var(--text-primary);
-      letter-spacing: -1px;
+      letter-spacing: -1.2px;
     }
 
     .feature-list {
       list-style: none;
       margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.15rem;
     }
 
     .feature-item {
       display: flex;
       align-items: flex-start;
       gap: 1rem;
-      margin-bottom: 1.25rem;
+      padding: 0.5rem;
+      border-radius: 10px;
+      transition: var(--transition-smooth);
+    }
+
+    .feature-item:hover {
+      background: var(--progress-bg);
     }
 
     .feature-icon {
-      background: var(--bg-primary);
+      background: var(--bg-secondary);
       color: var(--text-primary);
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       border: 1px solid var(--border-color);
-      border-radius: 8px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      font-size: 1.1rem;
+      font-size: 1.15rem;
     }
 
     .feature-text h4 {
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
       color: var(--text-primary);
       margin-bottom: 2px;
     }
 
     .feature-text p {
-      font-size: 0.85rem;
+      font-size: 0.825rem;
       color: var(--text-secondary);
-      line-height: 1.4;
+      line-height: 1.45;
     }
 
     /* Şifre Kapsayıcısı */
@@ -87,28 +103,49 @@
     }
     
     .password-wrapper input {
-      padding-right: 48px;
+      padding-right: 46px;
     }
 
     .eye-btn {
       position: absolute;
-      right: 14px;
+      right: 12px;
       top: 50%;
       transform: translateY(-50%);
       background: none;
       border: none;
-      color: #9ca3af;
+      color: var(--text-muted);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: var(--transition-smooth);
-      padding: 4px;
-      font-size: 1.2rem;
+      padding: 6px;
+      font-size: 1.15rem;
+      border-radius: 6px;
     }
 
     .eye-btn:hover {
       color: var(--text-primary);
+      background: var(--progress-bg);
+    }
+
+    .auth-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .form-group label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.4rem;
     }
   </style>
 </head>
@@ -123,17 +160,36 @@
       }
     })();
   </script>
-  <div class="container auth-wrapper" style="min-height: 100vh;">
+
+  <!-- Üst Bar: Kurulum Rozeti ve Tema Değiştirici -->
+  <header class="setup-header-bar">
+    <div class="setup-brand-pill">
+      <span class="setup-brand-dot"></span>
+      <span>Linklik Kurulum Sihirbazı</span>
+    </div>
+
+    <button class="theme-toggle-btn" onclick="toggleTheme()" title="Temayı Değiştir" id="themeBtn">
+      <i class="ph-light ph-moon" id="themeToggleIcon"></i>
+    </button>
+  </header>
+
+  <div class="container auth-wrapper">
     <div class="setup-container">
       
       <!-- Sol Panel: Bilgilendirme ve Özellikler -->
       <div class="setup-info-panel">
-        <div style="margin-bottom: 2rem;">
-          <img src="/static/img/Linklik-siyah.png" alt="Linklik Logo" class="auth-logo" style="height: 75px; width: auto; object-fit: contain;">
+        <div style="margin-bottom: 1.75rem;">
+          <img src="/static/img/Linklik-siyah.png" alt="Linklik Logo" class="auth-logo" style="height: 70px; width: auto; object-fit: contain;">
         </div>
-        <h1>Bağlantılarınızı Kısaltın, Hızla Yönetin.</h1>
-        <p style="color: var(--text-secondary); line-height: 1.6; font-size: 0.95rem;">
-          Linklik, SQLite WAL veritabanı optimizasyonları ve asenkron mimarisiyle saniyede binlerce isteği karşılayabilen, yapay zeka entegrasyonu odaklı modern bir link yönlendirme servisidir.
+
+        <div class="setup-badge-tag">
+          <i class="ph-light ph-sparkle"></i>
+          <span>İlk Başlangıç Yapılandırması</span>
+        </div>
+
+        <h1>Altyapınızı Hızla Kurun, Güvenle Yönetin.</h1>
+        <p style="color: var(--text-secondary); line-height: 1.65; font-size: 0.95rem;">
+          Linklik, SQLite WAL veritabanı optimizasyonları, asenkron havuz mimarisi, AI Agent MCP desteği ve gelişmiş güvenlik katmanıyla donatılmış yeni nesil bir link yönlendirme servisidir.
         </p>
         
         <ul class="feature-list">
@@ -141,53 +197,87 @@
             <div class="feature-icon"><i class="ph-light ph-lightning"></i></div>
             <div class="feature-text">
               <h4>Ultra Yüksek Performans</h4>
-              <p>SQLite WAL (Write-Ahead Logging) modu ile eşzamanlı okuma yazma kilitlenmeleri yaşanmaz.</p>
+              <p>SQLite WAL modu ile kilitsiz eşzamanlı yönlendirme ve 10.000 kuyruk kapasiteli asenkron analitik havuzu.</p>
             </div>
           </li>
           <li class="feature-item">
-            <div class="feature-icon"><i class="ph-light ph-users"></i></div>
+            <div class="feature-icon"><i class="ph-light ph-shield-check"></i></div>
             <div class="feature-text">
-              <h4>Yönetici ve Üye Ayrımı</h4>
-              <p>İlk kayıt olan kişi Superadmin olur, üye ekleme rotaları dış dünyaya otomatik kapanır.</p>
+              <h4>Superadmin Mimarisi</h4>
+              <p>İlk oluşturulan hesap tam yetkili yönetici olur, kurulum tamamlandığında genel kayıt kapısı kapanır.</p>
             </div>
           </li>
           <li class="feature-item">
             <div class="feature-icon"><i class="ph-light ph-cpu"></i></div>
             <div class="feature-text">
-              <h4>AI Agent Desteği</h4>
-              <p>Kullanıcılara özel X-API-KEY başlığı sayesinde yapay zekalar ve botlar sisteme kolayca entegre olur.</p>
+              <h4>AI Agent & MCP Protokolü</h4>
+              <p>Claude Desktop, Cursor ve LLM modellerinin doğrudan link yönetebileceği JSON-RPC 2.0 MCP entegrasyonu.</p>
+            </div>
+          </li>
+          <li class="feature-item">
+            <div class="feature-icon"><i class="ph-light ph-lock-key"></i></div>
+            <div class="feature-text">
+              <h4>Gelişmiş Güvenlik & TTL</h4>
+              <p>Şifre korumalı linkler, otomatik zaman aşımı (TTL), dinamik QR kodlar ve tek tıkla istatistik sıfırlama.</p>
             </div>
           </li>
         </ul>
       </div>
 
       <!-- Sağ Panel: Kurulum Formu -->
-      <div class="glass-card">
-        <div class="auth-header" style="text-align: left; margin-bottom: 1.5rem;">
-          <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">Sistem Kurulumu</h2>
-          <p style="font-size: 0.85rem; color: var(--text-secondary);">Superadmin (Yönetici) hesabını oluşturun.</p>
+      <div class="glass-card" style="padding: 2.25rem; border-radius: 16px;">
+        <div class="auth-header" style="text-align: left; margin-bottom: 1.25rem;">
+          <h2 style="font-size: 1.55rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem;">Sistem Kurulumu</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">İlk Superadmin (Yönetici) hesabınızı oluşturun.</p>
+        </div>
+
+        <!-- Güvenlik Bilgilendirme Kutusu -->
+        <div class="setup-security-notice">
+          <i class="ph-light ph-shield-star"></i>
+          <div>
+            <strong>Yönetici Hesabı Bildirimi</strong>
+            <span>Bu adımla oluşturulan hesap sistemin tek yetkili yöneticisi olacaktır. Kurulum bittikten sonra harici kayıt olma sayfası otomatik kapanır.</span>
+          </div>
         </div>
 
         <div id="alertBox"></div>
 
         <form id="setupForm" onsubmit="handleSetup(event)">
-          <div class="form-group">
-            <label for="username">Yönetici Kullanıcı Adı</label>
-            <input type="text" id="username" class="form-control" placeholder="Kullanıcı adı girin" required autofocus autocomplete="username">
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="username"><i class="ph-light ph-user"></i> Yönetici Kullanıcı Adı</label>
+            <input type="text" id="username" class="form-control" placeholder="Kullanıcı adı girin (en az 3 karakter)" required autofocus autocomplete="username">
           </div>
           
-          <div class="form-group">
-            <label for="password">Yönetici Şifresi</label>
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="password"><i class="ph-light ph-lock"></i> Yönetici Şifresi</label>
             <div class="password-wrapper">
-              <input type="password" id="password" class="form-control" placeholder="En az 6 karakter" required autocomplete="new-password">
+              <input type="password" id="password" class="form-control" placeholder="En az 6 karakter" required autocomplete="new-password" oninput="checkPasswordStrength(this.value)">
               <button type="button" class="eye-btn" onclick="togglePasswordVisibility('password', this)" title="Şifreyi Göster/Gizle">
-                <i class="ph-light ph-eye" id="eye-icon"></i>
+                <i class="ph-light ph-eye"></i>
+              </button>
+            </div>
+            <!-- Şifre Güç Çubuğu -->
+            <div class="password-strength-container">
+              <div class="password-strength-meter">
+                <div class="password-strength-fill" id="pwdStrengthFill"></div>
+              </div>
+              <span class="password-strength-text" id="pwdStrengthText">Şifre gücü</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="confirmPassword"><i class="ph-light ph-check-square"></i> Şifre Tekrarı</label>
+            <div class="password-wrapper">
+              <input type="password" id="confirmPassword" class="form-control" placeholder="Şifrenizi yeniden girin" required autocomplete="new-password">
+              <button type="button" class="eye-btn" onclick="togglePasswordVisibility('confirmPassword', this)" title="Şifreyi Göster/Gizle">
+                <i class="ph-light ph-eye"></i>
               </button>
             </div>
           </div>
           
-          <button type="submit" id="setupBtn" class="btn btn-primary" style="width: 100%; margin-top: 1rem; height: 46px;">
-            Kurulumu Tamamla ve Giriş Yap
+          <button type="submit" id="setupBtn" class="btn btn-primary" style="width: 100%; height: 48px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border-radius: 8px;">
+            <i class="ph-light ph-rocket-launch" style="font-size: 1.15rem;"></i>
+            <span>Kurulumu Tamamla ve Başla</span>
           </button>
         </form>
       </div>
@@ -199,16 +289,86 @@
     // Şifre görünürlüğünü aç/kapat
     function togglePasswordVisibility(inputId, btn) {
       const input = document.getElementById(inputId);
-      const icon = btn.querySelector('#eye-icon');
+      const icon = btn.querySelector('i');
+      if (!input || !icon) return;
       
       if (input.type === 'password') {
         input.type = 'text';
-        icon.className = 'ph-light ph-eye-closed';
+        icon.className = 'ph-light ph-eye-slash';
         btn.style.color = "var(--text-primary)";
       } else {
         input.type = 'password';
         icon.className = 'ph-light ph-eye';
-        btn.style.color = "#9ca3af";
+        btn.style.color = "var(--text-muted)";
+      }
+    }
+
+    // Şifre Güç Göstergesi
+    function checkPasswordStrength(val) {
+      const fill = document.getElementById('pwdStrengthFill');
+      const text = document.getElementById('pwdStrengthText');
+      if (!fill || !text) return;
+
+      if (!val || val.length === 0) {
+        fill.style.width = '0%';
+        fill.style.backgroundColor = 'transparent';
+        text.innerText = 'Şifre gücü';
+        text.style.color = 'var(--text-muted)';
+        return;
+      }
+
+      let score = 0;
+      if (val.length >= 6) score += 1;
+      if (val.length >= 10) score += 1;
+      if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score += 1;
+      if (/[0-9]/.test(val)) score += 1;
+      if (/[^A-Za-z0-9]/.test(val)) score += 1;
+
+      if (score <= 1) {
+        fill.style.width = '25%';
+        fill.style.backgroundColor = '#ef4444';
+        text.innerText = 'Zayıf şifre (en az 6 karakter gerekli)';
+        text.style.color = '#ef4444';
+      } else if (score <= 3) {
+        fill.style.width = '60%';
+        fill.style.backgroundColor = '#eab308';
+        text.innerText = 'Orta seviye şifre';
+        text.style.color = '#eab308';
+      } else {
+        fill.style.width = '100%';
+        fill.style.backgroundColor = '#22c55e';
+        text.innerText = 'Güçlü şifre';
+        text.style.color = '#22c55e';
+      }
+    }
+
+    // Tema Değiştirme
+    function toggleTheme() {
+      const isDark = document.body.classList.contains('dark-theme');
+      const newTheme = isDark ? 'light' : 'dark';
+      
+      if (newTheme === 'dark') {
+        document.body.classList.replace('light-theme', 'dark-theme');
+      } else {
+        document.body.classList.replace('dark-theme', 'light-theme');
+      }
+      
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon(newTheme);
+      updateLogo(newTheme);
+    }
+
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('themeToggleIcon');
+      if (icon) {
+        icon.className = theme === 'dark' ? 'ph-light ph-sun' : 'ph-light ph-moon';
+      }
+    }
+
+    function updateLogo(theme) {
+      const logo = document.querySelector('.auth-logo');
+      if (logo) {
+        logo.src = theme === 'dark' ? '/static/img/Linklik-beyaz.png' : '/static/img/Linklik-siyah.png';
       }
     }
 
@@ -229,12 +389,29 @@
       e.preventDefault();
       const alertBox = document.getElementById('alertBox');
       const setupBtn = document.getElementById('setupBtn');
-      const username = document.getElementById('username').value;
+      const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
 
       alertBox.innerHTML = '';
+
+      if (username.length < 3) {
+        alertBox.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Kullanıcı adı en az 3 karakter olmalıdır.</div>`;
+        return;
+      }
+
+      if (password.length < 6) {
+        alertBox.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Şifre en az 6 karakter olmalıdır.</div>`;
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        alertBox.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Girdiğiniz şifreler birbiriyle eşleşmiyor.</div>`;
+        return;
+      }
+
       setupBtn.disabled = true;
-      setupBtn.innerText = 'Kurulum Yapılıyor...';
+      setupBtn.innerHTML = `<i class="ph-light ph-circle-notch" style="animation: spin 1s linear infinite; font-size: 1.15rem;"></i><span>Kurulum Yapılıyor...</span>`;
 
       try {
         const res = await fetch('/api/v1/setup', {
@@ -246,47 +423,42 @@
         const data = await res.json();
         if (data.success) {
           alertBox.innerHTML = `
-            <div class="alert alert-success">
-              Kurulum başarılı! Yönlendiriliyorsunuz...
+            <div class="alert alert-success" style="margin-bottom:1rem;">
+              <i class="ph-light ph-check-circle" style="margin-right:6px;"></i> Kurulum başarılı! Yönetim paneline yönlendiriliyorsunuz...
             </div>
           `;
           setTimeout(() => {
             window.location.href = '/';
-          }, 1500);
+          }, 1200);
         } else {
           alertBox.innerHTML = `
-            <div class="alert alert-danger">
+            <div class="alert alert-danger" style="margin-bottom:1rem;">
               ${data.error || 'Bilinmeyen bir hata oluştu.'}
             </div>
           `;
           setupBtn.disabled = false;
-          setupBtn.innerText = 'Kurulumu Tamamla ve Giriş Yap';
+          setupBtn.innerHTML = `<i class="ph-light ph-rocket-launch" style="font-size: 1.15rem;"></i><span>Kurulumu Tamamla ve Başla</span>`;
         }
       } catch (err) {
         alertBox.innerHTML = `
-          <div class="alert alert-danger">
+          <div class="alert alert-danger" style="margin-bottom:1rem;">
             Sunucuya bağlanılamadı. Lütfen tekrar deneyin.
           </div>
         `;
         setupBtn.disabled = false;
-        setupBtn.innerText = 'Kurulumu Tamamla ve Giriş Yap';
+        setupBtn.innerHTML = `<i class="ph-light ph-rocket-launch" style="font-size: 1.15rem;"></i><span>Kurulumu Tamamla ve Başla</span>`;
       }
     }
 
-    checkSetup();
-
-    // Tema kontrolü ve logo güncellemesi
-    function initPageTheme() {
+    // Başlangıç başlatmaları
+    (function init() {
       const cachedTheme = localStorage.getItem('theme');
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       const theme = cachedTheme || systemTheme;
-      
-      const logo = document.querySelector('.auth-logo');
-      if (logo) {
-        logo.src = theme === 'dark' ? '/static/img/Linklik-beyaz.png' : '/static/img/Linklik-siyah.png';
-      }
-      
-      // Sistem teması değişikliklerini dinle
+      updateThemeIcon(theme);
+      updateLogo(theme);
+
+      // Sistem teması dinleyicisi
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
         if (!localStorage.getItem('theme')) {
           const newTheme = e.matches ? 'dark' : 'light';
@@ -295,13 +467,13 @@
           } else {
             document.body.classList.replace('dark-theme', 'light-theme');
           }
-          if (logo) {
-            logo.src = newTheme === 'dark' ? '/static/img/Linklik-beyaz.png' : '/static/img/Linklik-siyah.png';
-          }
+          updateThemeIcon(newTheme);
+          updateLogo(newTheme);
         }
       });
-    }
-    initPageTheme();
+
+      checkSetup();
+    })();
   </script>
 </body>
 </html>

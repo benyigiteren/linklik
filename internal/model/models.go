@@ -20,14 +20,18 @@ type User struct {
 
 // Link kısaltılmış bir link kaydını temsil eder.
 type Link struct {
-	ID          int64     `json:"id"`
-	OriginalURL string    `json:"original_url"`
-	ShortCode   string    `json:"short_code"`
-	CustomAlias string    `json:"custom_alias,omitempty"`
-	CreatedByID int64     `json:"created_by_id"`
-	ClickCount  int64     `json:"click_count"`
-	MaxClicks   int64     `json:"max_clicks"` // 0 veya negatif sınırsız anlamına gelir
-	CreatedAt   time.Time `json:"created_at"`
+	ID           int64      `json:"id"`
+	OriginalURL  string     `json:"original_url"`
+	ShortCode    string     `json:"short_code"`
+	CustomAlias  string     `json:"custom_alias,omitempty"`
+	CreatedByID  int64      `json:"created_by_id"`
+	ClickCount   int64      `json:"click_count"`
+	MaxClicks    int64      `json:"max_clicks"` // 0 veya negatif sınırsız anlamına gelir
+	IsActive     bool       `json:"is_active"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	PasswordHash string     `json:"-"`
+	HasPassword  bool       `json:"has_password"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // Analytics bir linke yapılan yönlendirme/tıklama verisini temsil eder.
@@ -50,6 +54,16 @@ type APIResponse struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+// PaginatedResponse sayfalama destekli liste yanıtları için kullanılır.
+type PaginatedResponse struct {
+	Success    bool        `json:"success"`
+	Data       interface{} `json:"data"`
+	TotalCount int64       `json:"total_count"`
+	Page       int         `json:"page"`
+	Limit      int         `json:"limit"`
+	TotalPages int         `json:"total_pages"`
+}
+
 // SetupRequest ilk kurulum için istek gövdesidir.
 type SetupRequest struct {
 	Username string `json:"username"`
@@ -64,16 +78,22 @@ type LoginRequest struct {
 
 // ShortenRequest link kısaltmak için gelen istek gövdesidir.
 type ShortenRequest struct {
-	URL         string `json:"url"`
-	CustomAlias string `json:"custom_alias,omitempty"`
-	MaxClicks   int64  `json:"max_clicks,omitempty"`
+	URL         string  `json:"url"`
+	CustomAlias string  `json:"custom_alias,omitempty"`
+	MaxClicks   int64   `json:"max_clicks,omitempty"`
+	ExpiresAt   *string `json:"expires_at,omitempty"` // "2026-12-31T23:59:59Z" veya "2026-12-31 23:59"
+	Password    string  `json:"password,omitempty"`
+	IsActive    *bool   `json:"is_active,omitempty"`
 }
 
 // LinkUpdateRequest var olan linki düzenlemek için gönderilen istek gövdesidir.
 type LinkUpdateRequest struct {
-	URL         string `json:"url"`
-	CustomAlias string `json:"custom_alias,omitempty"`
-	MaxClicks   int64  `json:"max_clicks"`
+	URL         string  `json:"url"`
+	CustomAlias string  `json:"custom_alias,omitempty"`
+	MaxClicks   int64   `json:"max_clicks"`
+	ExpiresAt   *string `json:"expires_at,omitempty"`
+	Password    string  `json:"password,omitempty"` // Boş verilirse mevcut şifre değişmez; "remove" verilirse şifre kaldırılır
+	IsActive    *bool   `json:"is_active,omitempty"`
 }
 
 // UserCreateRequest yeni üye oluşturmak için admin tarafından gönderilen istek gövdesidir.
@@ -91,4 +111,3 @@ type LinkStats struct {
 	Referrers   map[string]int `json:"referrers"`
 	DailyClicks map[string]int `json:"daily_clicks"`
 }
-

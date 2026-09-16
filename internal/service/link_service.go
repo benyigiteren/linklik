@@ -9,6 +9,9 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // LinkService link kısaltma ve sorgulama iş mantığı katmanıdır.
@@ -32,39 +35,37 @@ var ReservedAliases = map[string]bool{
 	"favicon.ico": true,
 	"robots.txt":  true,
 	"index.html":  true,
+	"mcp":         true,
+	"healthz":     true,
+	"readyz":      true,
 }
 
-// aliasRegex özel alias'lar için izin verilen karakter şablonudur (sadece İngilizce harfler, rakamlar, tire ve alt çizgi).
+// aliasRegex özel alias'lar için izin verilen karakter şablonudur.
 var aliasRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+$`)
 
 // ShortenURL orijinal bir URL'i kısaltır ve veritabanına kaydeder.
-func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClicks int64, createdByID int64) (*model.Link, error) {
+func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClicks int64, expiresAtStr *string, password string, isActive *bool, createdByID int64) (*model.Link, error) {
 	originalURL = strings.TrimSpace(originalURL)
 	if originalURL == "" {
 		return nil, errors.New("orijinal URL boş olamaz")
 	}
 
-	// Eğer protokol yoksa varsayılan olarak https:// ekle
 	if !strings.HasPrefix(originalURL, "http://") && !strings.HasPrefix(originalURL, "https://") {
 		originalURL = "https://" + originalURL
 	}
 
-	// URL formatını doğrula
 	u, err := url.ParseRequestURI(originalURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, errors.New("geçersiz URL formatı. Lütfen geçerli bir internet adresi yazın")
 	}
 
-	// URL uzunluk sınırı (aşırı uzun URL'ler DB şişirmesi / XSS yüzeyi)
 	if len(originalURL) > 2048 {
 		return nil, errors.New("URL çok uzun (maksimum 2048 karakter)")
 	}
 
 	var shortCode string
-
 	if customAlias != "" {
 		customAlias = strings.TrimSpace(customAlias)
-		// Özel takma ad format doğrulaması
 		if len(customAlias) < 3 || len(customAlias) > 30 {
 			return nil, errors.New("özel takma ad en az 3, en fazla 30 karakter olmalıdır")
 		}
@@ -72,13 +73,11 @@ func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClic
 			return nil, errors.New("özel takma ad sadece harf, rakam, tire (-) ve alt çizgi (_) içerebilir")
 		}
 
-		// Rezerve kelime kontrolü
 		lowerAlias := strings.ToLower(customAlias)
 		if ReservedAliases[lowerAlias] {
 			return nil, fmt.Errorf("'%s' özel takma adı sistem tarafından rezerve edilmiştir", customAlias)
 		}
 
-		// Çakışma kontrolü
 		existing, err := s.repo.GetByShortCode(customAlias)
 		if err != nil {
 			return nil, err
@@ -89,7 +88,6 @@ func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClic
 
 		shortCode = customAlias
 	} else {
-		// Rastgele benzersiz bir kısa kod üret (Base62 algoritması mantığıyla 6 karakterli)
 		var err error
 		shortCode, err = s.generateUniqueShortCode()
 		if err != nil {
@@ -97,13 +95,45 @@ func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClic
 		}
 	}
 
+	// Son kullanma tarihi ayrıştırma
+	var expiresAt *time.Time
+	if expiresAtStr != nil && strings.TrimSpace(*expiresAtStr) != "" {
+		parsed, err := parseDateString(strings.TrimSpace(*expiresAtStr))
+		if err != nil {
+			return nil, fmt.Errorf("geçersiz son kullanma tarihi: %v", err)
+		}
+		if parsed.Before(time.Now()) {
+			return nil, errors.New("son kullanma tarihi geçmiş bir tarih olamaz")
+		}
+		expiresAt = &parsed
+	}
+
+	// Şifre hashleme
+	var passwordHash string
+	if strings.TrimSpace(password) != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(strings.TrimSpace(password)), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("şifre hashlenemedi: %v", err)
+		}
+		passwordHash = string(hash)
+	}
+
+	active := true
+	if isActive != nil {
+		active = *isActive
+	}
+
 	l := &model.Link{
-		OriginalURL: originalURL,
-		ShortCode:   shortCode,
-		CustomAlias: customAlias,
-		CreatedByID: createdByID,
-		ClickCount:  0,
-		MaxClicks:   maxClicks,
+		OriginalURL:  originalURL,
+		ShortCode:    shortCode,
+		CustomAlias:  customAlias,
+		CreatedByID:  createdByID,
+		ClickCount:   0,
+		MaxClicks:    maxClicks,
+		IsActive:     active,
+		ExpiresAt:    expiresAt,
+		PasswordHash: passwordHash,
+		HasPassword:  passwordHash != "",
 	}
 
 	if err := s.repo.Create(l); err != nil {
@@ -113,7 +143,7 @@ func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClic
 	return l, nil
 }
 
-// GetOriginalURL kısa koda göre orijinal URL'i döner ve asenkron tıklanma sayacını artırır (tıklama sınırını da kontrol eder).
+// GetOriginalURL kısa koda göre linki getirir, aktiflik, süre ve şifre kontrolü yapar, tıklama sayacını artırır.
 func (s *LinkService) GetOriginalURL(shortCode string) (*model.Link, error) {
 	link, err := s.repo.GetByShortCode(shortCode)
 	if err != nil {
@@ -123,9 +153,64 @@ func (s *LinkService) GetOriginalURL(shortCode string) (*model.Link, error) {
 		return nil, nil
 	}
 
-	// Tıklama limiti kontrolü ve sayaç artırımı atomik yapılır (yarış durumu engeli).
-	// SQLite tek yazıcı olduğundan koşullu UPDATE, eşzamanlı istekler arasında
-	// limit aşımını (TOCTOU) garantili olarak önler.
+	// 1. Aktiflik Kontrolü
+	if !link.IsActive {
+		return link, errors.New("LINK_INACTIVE")
+	}
+
+	// 2. Son Kullanma Tarihi Kontrolü
+	if link.ExpiresAt != nil && time.Now().After(*link.ExpiresAt) {
+		return link, errors.New("LINK_EXPIRED")
+	}
+
+	// 3. Şifre Kontrolü (Şifreli linkler şifre ekranına yönlendirilmeli)
+	if link.PasswordHash != "" {
+		return link, errors.New("PASSWORD_REQUIRED")
+	}
+
+	// 4. Tıklama Limiti Kontrolü ve Sayaç Artırımı
+	if link.MaxClicks > 0 {
+		incremented, err := s.repo.IncrementClickIfBelowLimit(link.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !incremented {
+			return link, errors.New("MAX_CLICKS_REACHED")
+		}
+	} else {
+		_ = s.repo.IncrementClick(link.ID)
+	}
+
+	return link, nil
+}
+
+// VerifyPasswordAndGetURL şifreli bir linkin şifresini doğrular ve geçerliyse tıklamayı artırarak linki döner.
+func (s *LinkService) VerifyPasswordAndGetURL(shortCode, password string) (*model.Link, error) {
+	link, err := s.repo.GetByShortCode(shortCode)
+	if err != nil {
+		return nil, err
+	}
+	if link == nil {
+		return nil, errors.New("link bulunamadı")
+	}
+
+	if !link.IsActive {
+		return nil, errors.New("LINK_INACTIVE")
+	}
+
+	if link.ExpiresAt != nil && time.Now().After(*link.ExpiresAt) {
+		return nil, errors.New("LINK_EXPIRED")
+	}
+
+	if link.PasswordHash == "" {
+		return link, nil
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(link.PasswordHash), []byte(password)); err != nil {
+		return nil, errors.New("hatalı şifre")
+	}
+
+	// Sayaç artır
 	if link.MaxClicks > 0 {
 		incremented, err := s.repo.IncrementClickIfBelowLimit(link.ID)
 		if err != nil {
@@ -135,20 +220,58 @@ func (s *LinkService) GetOriginalURL(shortCode string) (*model.Link, error) {
 			return nil, errors.New("MAX_CLICKS_REACHED")
 		}
 	} else {
-		// Limitsiz linklerde koşulsuz artırım yeterlidir
 		_ = s.repo.IncrementClick(link.ID)
 	}
 
 	return link, nil
 }
 
-// GetLinkByShortCode kısa koda göre link kaydını döner (tıklama sayacını artırmaz ve limit kontrolü yapmaz).
+// ToggleLinkActive linkin aktif/pasif durumunu değiştirir.
+func (s *LinkService) ToggleLinkActive(shortCode string, requesterID int64, requesterRole string) (bool, error) {
+	link, err := s.repo.GetByShortCode(shortCode)
+	if err != nil {
+		return false, err
+	}
+	if link == nil {
+		return false, errors.New("link bulunamadı")
+	}
+
+	if requesterRole != model.RoleSuperadmin && link.CreatedByID != requesterID {
+		return false, errors.New("bu linki düzenleme yetkiniz bulunmamaktadır")
+	}
+
+	return s.repo.ToggleActive(link.ID)
+}
+
+// ResetLinkStats linkin tıklama sayısını ve analitik geçmişini sıfırlar.
+func (s *LinkService) ResetLinkStats(shortCode string, requesterID int64, requesterRole string) error {
+	link, err := s.repo.GetByShortCode(shortCode)
+	if err != nil {
+		return err
+	}
+	if link == nil {
+		return errors.New("link bulunamadı")
+	}
+
+	if requesterRole != model.RoleSuperadmin && link.CreatedByID != requesterID {
+		return errors.New("bu linkin istatistiklerini sıfırlama yetkiniz bulunmamaktadır")
+	}
+
+	return s.repo.ResetStats(link.ID)
+}
+
+// GetLinkByShortCode kısa koda göre link kaydını döner.
 func (s *LinkService) GetLinkByShortCode(shortCode string) (*model.Link, error) {
 	return s.repo.GetByShortCode(shortCode)
 }
 
-// UpdateLink var olan bir kısaltılmış linki günceller (yetki ve format kontrolü ile).
-func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, customAlias string, maxClicks int64, requesterID int64, requesterRole string) (*model.Link, error) {
+// GetPaginatedLinks sayfalama ve arama destekli link listesi döner.
+func (s *LinkService) GetPaginatedLinks(userID int64, isSuperadmin bool, page, limit int, search, status string) ([]*model.Link, int64, error) {
+	return s.repo.GetPaginated(userID, isSuperadmin, page, limit, search, status)
+}
+
+// UpdateLink var olan bir kısaltılmış linki günceller.
+func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, customAlias string, maxClicks int64, expiresAtStr *string, password string, isActive *bool, requesterID int64, requesterRole string) (*model.Link, error) {
 	link, err := s.repo.GetByShortCode(oldShortCode)
 	if err != nil {
 		return nil, err
@@ -157,12 +280,10 @@ func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, custom
 		return nil, errors.New("link bulunamadı")
 	}
 
-	// Yetki kontrolü
 	if requesterRole != model.RoleSuperadmin && link.CreatedByID != requesterID {
 		return nil, errors.New("bu linki düzenlemek için yetkiniz bulunmamaktadır")
 	}
 
-	// Orijinal URL temizle ve doğrula
 	originalURL = strings.TrimSpace(originalURL)
 	if originalURL == "" {
 		return nil, errors.New("orijinal URL boş olamaz")
@@ -174,10 +295,9 @@ func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, custom
 
 	u, err := url.ParseRequestURI(originalURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, errors.New("geçersiz URL formatı. Lütfen geçerli bir internet adresi yazın")
+		return nil, errors.New("geçersiz URL formatı")
 	}
 
-	// URL uzunluk sınırı
 	if len(originalURL) > 2048 {
 		return nil, errors.New("URL çok uzun (maksimum 2048 karakter)")
 	}
@@ -185,9 +305,7 @@ func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, custom
 	customAlias = strings.TrimSpace(customAlias)
 	var finalShortCode string
 
-	// Eğer yeni alias eskisinden farklıysa çakışma ve validasyon kontrolü yap
 	if customAlias != "" && customAlias != link.ShortCode && customAlias != link.CustomAlias {
-		// Validasyonlar
 		if len(customAlias) < 3 || len(customAlias) > 30 {
 			return nil, errors.New("özel takma ad en az 3, en fazla 30 karakter olmalıdır")
 		}
@@ -200,7 +318,6 @@ func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, custom
 			return nil, fmt.Errorf("'%s' özel takma adı sistem tarafından rezerve edilmiştir", customAlias)
 		}
 
-		// Çakışma kontrolü
 		existing, err := s.repo.GetByShortCode(customAlias)
 		if err != nil {
 			return nil, err
@@ -210,25 +327,54 @@ func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, custom
 		}
 		finalShortCode = customAlias
 	} else if customAlias == "" && link.CustomAlias != "" {
-		// Eğer kullanıcı önceden özel alias girmiş ama şimdi boş bırakarak rastgele kod istiyorsa yeni kod üretelim
 		code, err := s.generateUniqueShortCode()
 		if err != nil {
 			return nil, err
 		}
 		finalShortCode = code
 	} else {
-		// Değişiklik yoksa eskisini koru
 		finalShortCode = link.ShortCode
 		if customAlias == "" {
 			customAlias = link.CustomAlias
 		}
 	}
 
-	// Değerleri güncelle
+	// Son kullanma tarihi güncelleme
+	if expiresAtStr != nil {
+		str := strings.TrimSpace(*expiresAtStr)
+		if str == "" || strings.EqualFold(str, "clear") {
+			link.ExpiresAt = nil
+		} else {
+			parsed, err := parseDateString(str)
+			if err != nil {
+				return nil, fmt.Errorf("geçersiz son kullanma tarihi: %v", err)
+			}
+			link.ExpiresAt = &parsed
+		}
+	}
+
+	// Şifre güncelleme
+	if password != "" {
+		if strings.EqualFold(password, "remove") || strings.EqualFold(password, "clear") {
+			link.PasswordHash = ""
+		} else {
+			hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if err != nil {
+				return nil, fmt.Errorf("şifre hashlenemedi: %v", err)
+			}
+			link.PasswordHash = string(hash)
+		}
+	}
+
+	if isActive != nil {
+		link.IsActive = *isActive
+	}
+
 	link.OriginalURL = originalURL
 	link.ShortCode = finalShortCode
 	link.CustomAlias = customAlias
 	link.MaxClicks = maxClicks
+	link.HasPassword = link.PasswordHash != ""
 
 	if err := s.repo.Update(link); err != nil {
 		return nil, err
@@ -242,12 +388,12 @@ func (s *LinkService) GetLinksByUserID(userID int64) ([]*model.Link, error) {
 	return s.repo.GetByUserID(userID)
 }
 
-// GetAllLinks tüm sistem linklerini listeler (Superadmin için).
+// GetAllLinks tüm sistem linklerini listeler.
 func (s *LinkService) GetAllLinks() ([]*model.Link, error) {
 	return s.repo.GetAll()
 }
 
-// DeleteLinkByShortCode kısa koda göre linki siler ve yetki kontrolü yapar.
+// DeleteLinkByShortCode kısa koda göre linki siler.
 func (s *LinkService) DeleteLinkByShortCode(shortCode string, requesterID int64, requesterRole string) error {
 	link, err := s.repo.GetByShortCode(shortCode)
 	if err != nil {
@@ -257,7 +403,6 @@ func (s *LinkService) DeleteLinkByShortCode(shortCode string, requesterID int64,
 		return errors.New("link bulunamadı")
 	}
 
-	// Yetki Kontrolü: Yalnızca kendi linkini silen üye veya Superadmin silebilir.
 	if requesterRole != model.RoleSuperadmin && link.CreatedByID != requesterID {
 		return errors.New("bu linki silmek için yetkiniz bulunmamaktadır")
 	}
@@ -265,7 +410,6 @@ func (s *LinkService) DeleteLinkByShortCode(shortCode string, requesterID int64,
 	return s.repo.Delete(link.ID)
 }
 
-// generateUniqueShortCode çakışmayan, benzersiz 6 haneli Base62 kodu üretir.
 func (s *LinkService) generateUniqueShortCode() (string, error) {
 	const maxTries = 10
 	for i := 0; i < maxTries; i++ {
@@ -281,7 +425,6 @@ func (s *LinkService) generateUniqueShortCode() (string, error) {
 	return "", errors.New("benzersiz kısa kod üretilemedi, lütfen tekrar deneyin")
 }
 
-// generateRandomBase62 belirtilen uzunlukta rastgele Base62 karakter dizisi üretir.
 func generateRandomBase62(length int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	bytes := make([]byte, length)
@@ -290,4 +433,20 @@ func generateRandomBase62(length int) string {
 		bytes[i] = chars[b%62]
 	}
 	return string(bytes)
+}
+
+func parseDateString(str string) (time.Time, error) {
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, f := range formats {
+		if t, err := time.ParseInLocation(f, str, time.Local); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("desteklenmeyen tarih formatı (beklenen örn: 2026-12-31T23:59)")
 }

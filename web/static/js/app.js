@@ -1,5 +1,4 @@
 // --- XSS Koruması: HTML ve attribute kaçış yardımcıları ---
-// Tüm dinamik kullanıcı verilerini HTML içine yerleştirmeden önce escape etmek zorunludur.
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s)
@@ -9,9 +8,9 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-// Attribute (title="...", value="...") için escape
+
 function escapeAttr(s) { return escapeHtml(s); }
-// JavaScript string literal içine gömülecek değeri escape eder (onclick="...('${val}')")
+
 function escapeJsString(s) {
   if (s === null || s === undefined) return '';
   return String(s)
@@ -27,12 +26,16 @@ function escapeJsString(s) {
     .replace(/\u2029/g, '\\u2029');
 }
 
+// Filtreleme ve Arama Durumu
+let currentFilterStatus = '';
+let currentSearchQuery = '';
+let searchDebounceTimer = null;
+let currentSelectedAnalyticsCode = '';
+
 // Sayfa yüklendiğinde temel verileri çek ve dinamik alan adını ata
 document.addEventListener('DOMContentLoaded', () => {
-  // Tema tercihini uygula
   initTheme();
 
-  // Dinamik alan adı ön ekini ata
   const aliasPrefixEl = document.getElementById('aliasDomainPrefix');
   if (aliasPrefixEl) {
     aliasPrefixEl.innerText = window.location.host + '/';
@@ -46,31 +49,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Sekme (Tab) Değiştirme Mantığı
 function switchTab(tabId) {
-  // Tüm sekmeleri gizle
   const contents = document.querySelectorAll('.tab-content');
   contents.forEach(content => content.classList.remove('active'));
 
-  // Tüm menü butonlarının aktifliğini kaldır
   const buttons = document.querySelectorAll('.nav-item');
   buttons.forEach(btn => btn.classList.remove('active'));
 
-  // Seçilen sekmeyi göster
   const targetContent = document.getElementById(`content-${tabId}`);
   if (targetContent) {
     targetContent.classList.add('active');
   }
 
-  // Seçilen menü butonunu aktif et
   const targetBtn = document.getElementById(`tabBtn-${tabId}`);
   if (targetBtn) {
     targetBtn.classList.add('active');
   }
 
-  // Sayfa başlığını güncelle
   const titleMap = {
     'shortener': 'Link Kısaltıcı',
     'analytics': 'Detaylı Analiz',
-    'api': 'API Bağlantısı',
+    'api': 'API & MCP Bağlantısı',
     'users': 'Kullanıcı Yönetimi'
   };
   const titleEl = document.getElementById('pageTitle');
@@ -78,7 +76,6 @@ function switchTab(tabId) {
     titleEl.innerText = titleMap[tabId];
   }
 
-  // Mobilde menüyü kapat
   const sidebar = document.getElementById('appSidebar');
   const overlay = document.getElementById('sidebarOverlay');
   if (sidebar && sidebar.classList.contains('active')) {
@@ -87,7 +84,7 @@ function switchTab(tabId) {
   }
 }
 
-// Tema Yönetimi (Cihaza göre otomatik + Manuel kontrol)
+// Tema Yönetimi
 function initTheme() {
   const cachedTheme = localStorage.getItem('theme');
   const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -95,7 +92,6 @@ function initTheme() {
   
   applyTheme(theme);
   
-  // Sistem teması değişikliklerini dinle (kullanıcı manuel seçim yapmadıysa)
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
     if (!localStorage.getItem('theme')) {
       applyTheme(e.matches ? 'dark' : 'light');
@@ -115,13 +111,10 @@ function applyTheme(theme) {
     if (icon) icon.className = 'ph-light ph-moon';
   }
   
-  // Grafik varsa rengini güncellemek için yeniden çizelim
   const detailsWrapper = document.getElementById('analyticsDetailsWrapper');
   if (detailsWrapper && !detailsWrapper.classList.contains('hidden') && clicksChartInstance) {
-    const labelEl = document.getElementById('selectedLinkTitle');
-    if (labelEl) {
-      const code = labelEl.innerText.replace('Analiz Raporu: ', '');
-      if (code) loadAnalyticsForSelected(code);
+    if (currentSelectedAnalyticsCode) {
+      loadAnalyticsForSelected(currentSelectedAnalyticsCode);
     }
   }
 }
@@ -135,7 +128,6 @@ function toggleTheme() {
   applyTheme(newTheme);
 }
 
-// Mobil Sidebar Aç/Kapat
 function toggleSidebar() {
   const sidebar = document.getElementById('appSidebar');
   const overlay = document.getElementById('sidebarOverlay');
@@ -145,7 +137,6 @@ function toggleSidebar() {
   }
 }
 
-// Şifre Göster/Gizle Yardımcısı
 function togglePasswordVisibility(inputId, btn) {
   const input = document.getElementById(inputId);
   const icon = btn.querySelector('i');
@@ -162,17 +153,15 @@ function togglePasswordVisibility(inputId, btn) {
   }
 }
 
-// Toast bildirim göstergesi
 function showToast(message) {
   const toast = document.getElementById('toast');
   toast.innerText = message;
   toast.classList.add('show');
   setTimeout(() => {
     toast.classList.remove('show');
-  }, 2000);
+  }, 2200);
 }
 
-// Güvenli Çıkış İşlemi
 async function handleLogout() {
   try {
     const res = await fetch('/api/v1/logout', { method: 'POST' });
@@ -185,37 +174,33 @@ async function handleLogout() {
   }
 }
 
-// API Key Göster/Gizle
-function toggleApiKey() {
-  const input = document.getElementById('apiKeyVal');
-  if (input.type === 'password') {
-    input.type = 'text';
-  } else {
-    input.type = 'password';
+function copyApiKey() {
+  const input = document.getElementById('apiKeyField');
+  if (input) {
+    navigator.clipboard.writeText(input.value);
+    showToast("API Anahtarı panoya kopyalandı!");
   }
 }
 
-// API Key Kopyala
-function copyApiKey() {
-  const input = document.getElementById('apiKeyVal');
-  navigator.clipboard.writeText(input.value);
-  showToast("API Anahtarı kopyalandı!");
+function copyShortUrl(url) {
+  navigator.clipboard.writeText(url);
+  showToast("Kısa bağlantı kopyalandı!");
 }
 
-// API Key Yenileme
-async function regenerateApiKey() {
-  if (!confirm("API anahtarınızı yenilemek istediğinize emin misiniz? Eski anahtarınızı kullanan servisler artık çalışmayacaktır!")) {
+async function handleRegenerateKey() {
+  if (!confirm("API anahtarınızı yenilemek istediğinize emin misiniz? Eski anahtarınızı kullanan AI ajanları veya harici servisler artık erişemeyecektir!")) {
     return;
   }
   try {
     const res = await fetch('/api/v1/users/refresh-token', { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-      document.getElementById('apiKeyVal').value = data.data.api_key;
+      const newKey = data.data.api_key;
+      const keyField = document.getElementById('apiKeyField');
+      if (keyField) keyField.value = newKey;
       
-      // Dokümanlarda geçen anahtarları da güncelle
       const docKeys = document.querySelectorAll('.doc-api-key');
-      docKeys.forEach(el => el.innerText = data.data.api_key);
+      docKeys.forEach(el => el.innerText = newKey);
       
       showToast("API Anahtarı başarıyla yenilendi");
     } else {
@@ -226,10 +211,78 @@ async function regenerateApiKey() {
   }
 }
 
+// Gelişmiş Seçenekler Aç/Kapa
+function toggleAdvancedShortenOptions() {
+  const drawer = document.getElementById('advancedShortenOptions');
+  const btn = document.getElementById('advOptToggleBtn');
+  if (!drawer || !btn) return;
+
+  const isExpanded = drawer.classList.contains('expanded');
+  if (isExpanded) {
+    drawer.classList.remove('expanded');
+    btn.classList.remove('active');
+  } else {
+    drawer.classList.add('expanded');
+    btn.classList.add('active');
+    // Drawer açıldığında ilk alana hafif odaklanma
+    const expiresInput = document.getElementById('expiresAt');
+    if (expiresInput) {
+      setTimeout(() => expiresInput.focus(), 150);
+    }
+  }
+}
+
+// Gelişmiş Seçenekler Aktif Rozetini Güncelle
+function updateAdvBadge() {
+  const expiresAt = document.getElementById('expiresAt')?.value;
+  const password = document.getElementById('linkPassword')?.value;
+  const badge = document.getElementById('advActiveBadge');
+  if (!badge) return;
+
+  let count = 0;
+  if (expiresAt && expiresAt.trim() !== '') count++;
+  if (password && password.trim() !== '') count++;
+
+  if (count > 0) {
+    badge.innerText = `${count} Ayar`;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+// Filtreleme Durumu Ayarla
+function setFilterStatus(status) {
+  currentFilterStatus = status;
+  ['all', 'active', 'inactive', 'expired'].forEach(s => {
+    const btn = document.getElementById(`filterBtn-${s}`);
+    if (btn) btn.classList.remove('active');
+  });
+
+  const activeBtnId = status === '' ? 'filterBtn-all' : `filterBtn-${status}`;
+  const activeBtn = document.getElementById(activeBtnId);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  fetchLinks();
+}
+
+// Arama Girişi (Debounced)
+function handleSearchInput(val) {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    currentSearchQuery = val.trim();
+    fetchLinks();
+  }, 250);
+}
+
 // Linkleri Listeleme ve Arayüzü Besleme
 async function fetchLinks() {
   try {
-    const res = await fetch('/api/v1/links');
+    const params = new URLSearchParams();
+    if (currentSearchQuery) params.set('search', currentSearchQuery);
+    if (currentFilterStatus) params.set('status', currentFilterStatus);
+
+    const res = await fetch(`/api/v1/links?${params.toString()}`);
     const data = await res.json();
     
     const tbody = document.getElementById('linksTableBody');
@@ -238,27 +291,27 @@ async function fetchLinks() {
     if (!data.success) {
       const errMsg = `<tr><td colspan="5" style="text-align: center; color: var(--accent-danger);">${escapeHtml(data.error)}</td></tr>`;
       tbody.innerHTML = errMsg;
-      if (analyticsTbody) {
-        analyticsTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--accent-danger);">${escapeHtml(data.error)}</td></tr>`;
-      }
       return;
     }
 
-    const links = data.data || [];
+    // PaginatedResponse veya direkt dizi kontrolü
+    let links = [];
+    if (Array.isArray(data.data)) {
+      links = data.data;
+    } else if (data.data && Array.isArray(data.data.items)) {
+      links = data.data.items;
+    }
 
     if (links.length === 0) {
-      const emptyMsg = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Kısaltılmış link bulunmamaktadır.</td></tr>`;
+      const emptyMsg = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Kayıtlı bağlantı bulunamadı.</td></tr>`;
       tbody.innerHTML = emptyMsg;
       if (analyticsTbody) {
-        analyticsTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Kısaltılmış link bulunmamaktadır.</td></tr>`;
+        analyticsTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Bağlantı bulunmamaktadır.</td></tr>`;
       }
-      document.getElementById('statsTotalLinks').innerText = '0';
-      document.getElementById('statsTotalClicks').innerText = '0';
       return;
     }
 
-    // Toplam Link ve Tıklanma sayısı güncellemeleri
-    document.getElementById('statsTotalLinks').innerText = links.length;
+    document.getElementById('statsTotalLinks').innerText = data.total_count !== undefined ? data.total_count : links.length;
     let totalClicks = 0;
 
     let html = '';
@@ -270,51 +323,82 @@ async function fetchLinks() {
         year: 'numeric', month: 'short', day: 'numeric'
       });
 
-      // --- Tüm dinamik değerler escape edilir (XSS koruması) ---
       const escShortCode = escapeAttr(link.short_code);
-      const escShortUrl = escapeAttr(link.short_url);
+      const escShortUrl = escapeAttr(link.short_url || `${window.location.origin}/${link.short_code}`);
       const escOriginalUrlHtml = escapeHtml(link.original_url);
       const escOriginalUrlAttr = escapeAttr(link.original_url);
       const escAlias = escapeJsString(link.custom_alias || '');
       const escShortCodeJs = escapeJsString(link.short_code);
       const escOriginalUrlJs = escapeJsString(link.original_url);
+      const expiresAtJs = link.expires_at ? escapeJsString(link.expires_at) : '';
 
-      // 1. Link Kısaltıcı Tablosu Satırı
+      // Durum rozeti tespiti
+      const isExpired = link.expires_at && new Date(link.expires_at) < new Date();
+      let statusBadge = '';
+      if (!link.is_active) {
+        statusBadge = `<span class="status-badge inactive"><i class="ph-light ph-pause"></i> Pasif</span>`;
+      } else if (isExpired) {
+        statusBadge = `<span class="status-badge expired"><i class="ph-light ph-clock"></i> Süresi Doldu</span>`;
+      } else {
+        statusBadge = `<span class="status-badge active"><i class="ph-light ph-check-circle"></i> Aktif</span>`;
+      }
+
+      let passwordBadge = '';
+      if (link.has_password) {
+        passwordBadge = `<span class="status-badge locked" title="Şifre Korumalı Bağlantı"><i class="ph-light ph-lock"></i> Şifreli</span>`;
+      }
+
       html += `
         <tr>
           <td>
-            <a href="${escShortUrl}" target="_blank" rel="noopener noreferrer" class="link-url">${escShortCode}</a>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <a href="${escShortUrl}" target="_blank" rel="noopener noreferrer" class="link-url">${escShortCode}</a>
+              ${statusBadge}
+              ${passwordBadge}
+            </div>
           </td>
           <td>
             <div class="original-url-text" title="${escOriginalUrlAttr}">${escOriginalUrlHtml}</div>
           </td>
-          <td style="font-weight: 600; color: var(--text-primary);">${Number(link.click_count)} / ${link.max_clicks > 0 ? Number(link.max_clicks) : 'Sınırsız'}</td>
+          <td style="font-weight: 600; color: var(--text-primary);">
+            ${Number(link.click_count)} / ${link.max_clicks > 0 ? Number(link.max_clicks) : 'Sınırsız'}
+          </td>
           <td style="color: var(--text-secondary); font-size: 0.85rem;">${escapeHtml(formattedDate)}</td>
           <td style="text-align: right; white-space: nowrap;">
-            <button class="btn btn-secondary btn-small" style="margin-right: 6px; gap:4px;" onclick="openEditModal('${escShortCodeJs}', '${escOriginalUrlJs}', '${escAlias}', ${Number(link.max_clicks)})">
-              <i class="ph-light ph-pencil"></i> Düzenle
+            <button class="table-action-btn" title="Kısa Bağlantıyı Kopyala" onclick="copyShortUrl('${escShortUrl}')">
+              <i class="ph-light ph-copy"></i>
             </button>
-            <button class="btn btn-secondary btn-small" style="margin-right: 6px; gap:4px;" onclick="viewAnalytics('${escShortCodeJs}')">
-              <i class="ph-light ph-chart-bar"></i> Analiz
+            <button class="table-action-btn" title="QR Kodu Görüntüle" onclick="openQRModal('${escShortCodeJs}', '${escShortUrl}')">
+              <i class="ph-light ph-qr-code"></i>
             </button>
-            <button class="btn btn-danger btn-small" style="gap:4px;" onclick="deleteLink('${escShortCodeJs}')">
-              <i class="ph-light ph-trash"></i> Sil
+            <button class="table-action-btn ${link.is_active ? 'active-btn' : 'inactive-btn'}" title="${link.is_active ? 'Bağlantıyı Durdur (Pasife Al)' : 'Bağlantıyı Aç (Aktifleştir)'}" onclick="toggleLinkActive('${escShortCodeJs}')">
+              <i class="ph-light ${link.is_active ? 'ph-pause' : 'ph-play'}"></i>
+            </button>
+            <button class="table-action-btn" title="İstatistikleri Sıfırla" onclick="resetLinkStats('${escShortCodeJs}')">
+              <i class="ph-light ph-arrows-counter-clockwise"></i>
+            </button>
+            <button class="table-action-btn" title="Düzenle" onclick="openEditModal('${escShortCodeJs}', '${escOriginalUrlJs}', '${escAlias}', ${Number(link.max_clicks)}, '${expiresAtJs}', ${link.is_active})">
+              <i class="ph-light ph-pencil"></i>
+            </button>
+            <button class="table-action-btn" title="Sil" style="color: #ef4444;" onclick="deleteLink('${escShortCodeJs}')">
+              <i class="ph-light ph-trash"></i>
             </button>
           </td>
         </tr>
       `;
 
-      // 2. Analiz Sekmesi Link Seçim Tablosu Satırı
       analyticsHtml += `
         <tr>
-          <td style="font-weight: 600; color: var(--text-primary);">${escShortCode}</td>
+          <td style="font-weight: 600; color: var(--text-primary);">
+            ${escShortCode} ${statusBadge}
+          </td>
           <td>
-            <div class="original-url-text" title="${escOriginalUrlAttr}" style="max-width:320px;">${escOriginalUrlHtml}</div>
+            <div class="original-url-text" title="${escOriginalUrlAttr}" style="max-width:280px;">${escOriginalUrlHtml}</div>
           </td>
           <td style="font-weight: 600;">${Number(link.click_count)} / ${link.max_clicks > 0 ? Number(link.max_clicks) : 'Sınırsız'}</td>
           <td style="text-align: right;">
             <button class="btn btn-secondary btn-small" style="gap:4px;" onclick="loadAnalyticsForSelected('${escShortCodeJs}')">
-              <i class="ph-light ph-eye"></i> Seç ve İncele
+              <i class="ph-light ph-eye"></i> İncele
             </button>
           </td>
         </tr>
@@ -325,7 +409,6 @@ async function fetchLinks() {
     if (analyticsTbody) {
       analyticsTbody.innerHTML = analyticsHtml;
     }
-    
     document.getElementById('statsTotalClicks').innerText = totalClicks;
 
   } catch (err) {
@@ -342,16 +425,26 @@ async function handleShorten(e) {
   const url = document.getElementById('originalUrl').value;
   const alias = document.getElementById('customAlias').value;
   const maxClicksVal = parseInt(document.getElementById('maxClicks').value) || 0;
+  const expiresAtVal = document.getElementById('expiresAt').value;
+  const passwordVal = document.getElementById('linkPassword').value;
 
   alertDiv.innerHTML = '';
   btn.disabled = true;
   btn.innerText = 'Kısaltılıyor...';
 
+  const payload = {
+    url: url,
+    custom_alias: alias,
+    max_clicks: maxClicksVal
+  };
+  if (expiresAtVal) payload.expires_at = expiresAtVal;
+  if (passwordVal) payload.password = passwordVal;
+
   try {
     const res = await fetch('/api/v1/links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: url, custom_alias: alias, max_clicks: maxClicksVal })
+      body: JSON.stringify(payload)
     });
     
     const data = await res.json();
@@ -366,6 +459,9 @@ async function handleShorten(e) {
       document.getElementById('originalUrl').value = '';
       document.getElementById('customAlias').value = '';
       document.getElementById('maxClicks').value = '0';
+      document.getElementById('expiresAt').value = '';
+      document.getElementById('linkPassword').value = '';
+      updateAdvBadge();
       fetchLinks();
     } else {
       alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">${escapeHtml(data.error)}</div>`;
@@ -378,8 +474,84 @@ async function handleShorten(e) {
   }
 }
 
+// Aktif/Pasif Toggle
+async function toggleLinkActive(shortCode) {
+  try {
+    const res = await fetch(`/api/v1/links/${encodeURIComponent(shortCode)}/toggle`, {
+      method: 'PATCH'
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.data.message);
+      fetchLinks();
+    } else {
+      alert("Hata: " + data.error);
+    }
+  } catch (err) {
+    alert("Bağlantı hatası: Durum güncellenemedi.");
+  }
+}
+
+// İstatistik Sıfırlama
+async function resetLinkStats(shortCode) {
+  if (!confirm(`'${shortCode}' linkinin tüm tıklama ve analitik verilerini sıfırlamak istediğinize emin misiniz? Bu işlem geri alınamaz!`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/v1/links/${encodeURIComponent(shortCode)}/reset-stats`, {
+      method: 'POST'
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("İstatistikler başarıyla sıfırlandı!");
+      fetchLinks();
+      if (currentSelectedAnalyticsCode === shortCode) {
+        loadAnalyticsForSelected(shortCode);
+      }
+    } else {
+      alert("Hata: " + data.error);
+    }
+  } catch (err) {
+    alert("Bağlantı hatası: İstatistikler sıfırlanamadı.");
+  }
+}
+
+// Analiz sekmesinden mevcut seçili linki sıfırla
+function handleResetCurrentStats() {
+  if (currentSelectedAnalyticsCode) {
+    resetLinkStats(currentSelectedAnalyticsCode);
+  }
+}
+
+// --- QR Kod Modalı ---
+function openQRModal(shortCode, shortURL) {
+  const modal = document.getElementById('qrModal');
+  const img = document.getElementById('qrModalImage');
+  const linkText = document.getElementById('qrModalLinkText');
+  const downloadBtn = document.getElementById('qrDownloadBtn');
+  const title = document.getElementById('qrModalTitle');
+
+  if (!modal) return;
+
+  const qrSrc = `/api/v1/links/${encodeURIComponent(shortCode)}/qr?size=300`;
+  const downloadSrc = `/api/v1/links/${encodeURIComponent(shortCode)}/qr?size=512`;
+
+  title.innerText = `${shortCode} - QR Kod`;
+  img.src = qrSrc;
+  linkText.innerText = shortURL;
+  downloadBtn.href = downloadSrc;
+  downloadBtn.download = `qr-${shortCode}.png`;
+
+  modal.classList.add('active');
+}
+
+function closeQRModal() {
+  const modal = document.getElementById('qrModal');
+  if (modal) modal.classList.remove('active');
+}
+
 // --- Düzenleme Modalı Fonksiyonları ---
-function openEditModal(shortCode, originalUrl, customAlias, maxClicks) {
+function openEditModal(shortCode, originalUrl, customAlias, maxClicks, expiresAt, isActive) {
   const modal = document.getElementById('editLinkModal');
   if (!modal) return;
   
@@ -387,6 +559,23 @@ function openEditModal(shortCode, originalUrl, customAlias, maxClicks) {
   document.getElementById('editOriginalUrl').value = originalUrl;
   document.getElementById('editCustomAlias').value = customAlias;
   document.getElementById('editMaxClicks').value = maxClicks;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('editIsActive').checked = isActive !== false;
+
+  const expField = document.getElementById('editExpiresAt');
+  if (expField) {
+    if (expiresAt) {
+      const d = new Date(expiresAt);
+      if (!isNaN(d.getTime())) {
+        const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        expField.value = localISO;
+      } else {
+        expField.value = '';
+      }
+    } else {
+      expField.value = '';
+    }
+  }
   
   const editPrefix = document.getElementById('editAliasDomainPrefix');
   if (editPrefix) {
@@ -415,16 +604,34 @@ async function handleUpdateLink(e) {
   const url = document.getElementById('editOriginalUrl').value;
   const alias = document.getElementById('editCustomAlias').value;
   const maxClicks = parseInt(document.getElementById('editMaxClicks').value) || 0;
+  const expiresAt = document.getElementById('editExpiresAt').value;
+  const password = document.getElementById('editPassword').value;
+  const isActive = document.getElementById('editIsActive').checked;
 
   if (alertDiv) alertDiv.innerHTML = '';
   btn.disabled = true;
   btn.innerText = 'Kaydediliyor...';
 
+  const payload = {
+    url: url,
+    custom_alias: alias,
+    max_clicks: maxClicks,
+    is_active: isActive
+  };
+  if (expiresAt) {
+    payload.expires_at = expiresAt;
+  } else {
+    payload.expires_at = "clear";
+  }
+  if (password) {
+    payload.password = password;
+  }
+
   try {
-    const res = await fetch(`/api/v1/links/${oldCode}`, {
+    const res = await fetch(`/api/v1/links/${encodeURIComponent(oldCode)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: url, custom_alias: alias, max_clicks: maxClicks })
+      body: JSON.stringify(payload)
     });
     
     const data = await res.json();
@@ -466,7 +673,7 @@ async function deleteLink(shortCode) {
   }
 }
 
-// Kullanıcı Yönetimi - Kullanıcıları Listele (Superadmin)
+// Kullanıcı Yönetimi
 async function fetchUsers() {
   try {
     const res = await fetch('/api/v1/admin/users');
@@ -480,18 +687,12 @@ async function fetchUsers() {
 
     const users = data.data || [];
     let html = '';
-    
-    // Oturum açmış kullanıcının adını arayüzden oku
     const currentUsername = document.querySelector('.user-name')?.innerText?.trim();
 
     users.forEach(u => {
       const roleStr = u.role === 'superadmin' ? 'Yönetici' : 'Üye';
       const safeRole = escapeAttr(u.role);
-      
-      // Superadmin kendisini veya başka bir admini silemez
       const isSelfOrAdmin = u.username === currentUsername || u.role === 'superadmin';
-      
-      // ID yalnızca sayı; username hem HTML bağlamında hem JS string bağlamında kullanılıyor
       const safeId = Number(u.id);
       const usernameHtml = escapeHtml(u.username);
       const usernameJs = escapeJsString(u.username);
@@ -520,7 +721,6 @@ async function fetchUsers() {
   }
 }
 
-// Kullanıcı Yönetimi - Kullanıcı Ekle (Superadmin)
 async function handleCreateUser(e) {
   e.preventDefault();
   const alertDiv = document.getElementById('userAlert');
@@ -553,7 +753,6 @@ async function handleCreateUser(e) {
   }
 }
 
-// Kullanıcı Yönetimi - Kullanıcı Sil (Superadmin)
 async function deleteUser(userID, username) {
   if (!confirm(`'${username}' isimli üyeyi sistemden kalıcı olarak silmek istediğinize emin misiniz?`)) {
     return;
@@ -575,53 +774,51 @@ async function deleteUser(userID, username) {
 // --- Detay Analitik Sayfa İşlemleri ---
 let clicksChartInstance = null;
 
-// Tablodaki "Analiz" butonuna tıklandığında tetiklenir
 function viewAnalytics(shortCode) {
-  // Analiz sekmesine geçiş yap
   switchTab('analytics');
-  
-  // Analizi yükle
   loadAnalyticsForSelected(shortCode);
 }
 
-// Seçilen linke göre analitiği API'den çeker ve grafik/listeleri doldurur
 async function loadAnalyticsForSelected(shortCode) {
   const detailsWrapper = document.getElementById('analyticsDetailsWrapper');
   const emptyState = document.getElementById('analyticsEmptyState');
+  const titleEl = document.getElementById('selectedLinkTitle');
 
   if (!shortCode) {
     detailsWrapper.classList.add('hidden');
     emptyState.classList.remove('hidden');
+    currentSelectedAnalyticsCode = '';
     return;
   }
 
+  currentSelectedAnalyticsCode = shortCode;
   emptyState.classList.add('hidden');
   detailsWrapper.classList.remove('hidden');
+  if (titleEl) {
+    titleEl.innerText = `Analiz Raporu: ${shortCode}`;
+  }
 
   try {
-    const res = await fetch(`/api/v1/analytics/${shortCode}`);
+    const res = await fetch(`/api/v1/analytics/${encodeURIComponent(shortCode)}`);
     const data = await res.json();
 
     if (!data.success) {
       alert("Analitik verileri alınamadı: " + data.error);
-      loadAnalyticsForSelected(''); // Sıfırla
+      loadAnalyticsForSelected('');
       return;
     }
 
     const stats = data.data;
 
-    // 1. Grafik çizimi (Günlük Tıklanmalar) - DOM reflow gecikmesini önlemek için setTimeout ile çağır
     setTimeout(() => {
       drawClicksChart(stats.daily_clicks || {});
     }, 80);
 
-    // 2. Kırılım listelerini doldur
     populateList('countryList', stats.countries || {});
     populateList('referrerList', stats.referrers || {});
     populateList('browserList', stats.browsers || {});
     populateList('osList', stats.os || {});
 
-    // Sayfa içi kaydırma (Seç ve incele yapınca direkt analiz detaylarına insin)
     detailsWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (err) {
@@ -634,7 +831,7 @@ function populateList(elementId, dataMap) {
   const container = document.getElementById(elementId);
   if (!container) return;
   
-  const items = Object.entries(dataMap).sort((a, b) => b[1] - a[1]); // Çoktan aza sırala
+  const items = Object.entries(dataMap).sort((a, b) => b[1] - a[1]);
 
   if (items.length === 0) {
     container.innerHTML = `<div class="analytics-list-item"><span style="color:var(--text-muted);">Veri bulunmuyor</span></div>`;
@@ -645,14 +842,12 @@ function populateList(elementId, dataMap) {
   let html = '';
   items.forEach(([key, val]) => {
     let label = key;
-    // Localhost / loopback ip adresleri için Türkçe ülke adı göster
     if (elementId === 'countryList') {
       if (key === 'localhost' || key === '127.0.0.1' || key === '::1' || key === 'UNKNOWN' || key === '') {
         label = 'Türkiye (Yerel Ağ)';
       }
     }
     const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
-    // Sayısal val; XSS riski yok ama Number() ile emin olalım. label ise tamamen escape edilir.
     const safeLabelHtml = escapeHtml(label);
     const safeLabelAttr = escapeAttr(label);
     const safeVal = Number(val);
@@ -674,7 +869,6 @@ function drawClicksChart(dailyClicks) {
     clicksChartInstance.destroy();
   }
 
-  // Tarihleri sıralı olarak al
   const sortedDays = Object.keys(dailyClicks).sort();
   const counts = sortedDays.map(day => dailyClicks[day]);
 
@@ -683,7 +877,6 @@ function drawClicksChart(dailyClicks) {
     counts.push(0);
   }
 
-  // Koyu / Açık temaya göre renkleri belirle
   const isDark = document.body.classList.contains('dark-theme');
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
   const tickColor = isDark ? '#a1a1aa' : '#475569';
@@ -775,14 +968,12 @@ async function handleUpdateProfile(e) {
     if (data.success) {
       showToast("Profiliniz başarıyla güncellendi!");
       
-      // Kullanıcı adı alanlarını sayfada dinamik olarak güncelle
       const nameEls = document.querySelectorAll('.user-name');
       nameEls.forEach(el => {
         el.innerText = username;
         el.title = username;
       });
       
-      // Avatar harfini güncelle
       const avatarEl = document.getElementById('sidebarUserAvatar');
       if (avatarEl && username) {
         avatarEl.innerText = username.charAt(0).toUpperCase();

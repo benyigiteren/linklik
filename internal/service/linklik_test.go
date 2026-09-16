@@ -7,14 +7,15 @@ import (
 	"linklik/internal/repository"
 	"linklik/internal/service"
 	"testing"
+	"time"
 )
 
 // setupTestDB testler için bellek-içi (in-memory) SQLite veritabanını başlatır.
-func setupTestDB(t *testing.T) (*service.UserService, *service.LinkService) {
+func setupTestDB(t *testing.T) (*service.UserService, *service.LinkService, *service.AnalyticsService) {
 	config.GlobalConfig = &config.Config{
 		Port:      "8080",
 		DBPath:    ":memory:",
-		JWTSecret: []byte("test_secret_key_1234567890"),
+		JWTSecret: []byte("test_secret_key_1234567890_at_least_32_bytes_long"),
 		BaseURL:   "http://localhost:8080",
 	}
 
@@ -25,13 +26,14 @@ func setupTestDB(t *testing.T) (*service.UserService, *service.LinkService) {
 
 	userRepo := repository.NewUserRepository()
 	linkRepo := repository.NewLinkRepository()
+	analyticsRepo := repository.NewAnalyticsRepository()
 
-	return service.NewUserService(userRepo), service.NewLinkService(linkRepo)
+	return service.NewUserService(userRepo), service.NewLinkService(linkRepo), service.NewAnalyticsService(analyticsRepo)
 }
 
 // TestSetupAndUserCreation ilk kurulum, superadmin yetkilendirmesi, normal kullanıcı oluşturma ve giriş doğrulamalarını test eder.
 func TestSetupAndUserCreation(t *testing.T) {
-	userService, _ := setupTestDB(t)
+	userService, _, _ := setupTestDB(t)
 	defer db.CloseDB()
 
 	// 1. Başlangıçta kurulum gerekiyor olmalıdır.
@@ -88,7 +90,7 @@ func TestSetupAndUserCreation(t *testing.T) {
 
 // TestLinkShortening link kısaltma kurallarını, çakışmaları, rezerve kelimeleri ve asıl URL'i geri getirmeyi test eder.
 func TestLinkShortening(t *testing.T) {
-	userService, linkService := setupTestDB(t)
+	userService, linkService, _ := setupTestDB(t)
 	defer db.CloseDB()
 
 	user, err := userService.SetupFirstUser("admin", "password123")
@@ -97,7 +99,7 @@ func TestLinkShortening(t *testing.T) {
 	}
 
 	// 1. Geçerli URL kısaltma (Rastgele kodlu).
-	link, err := linkService.ShortenURL("https://google.com", "", 0, user.ID)
+	link, err := linkService.ShortenURL("https://google.com", "", 0, nil, "", nil, user.ID)
 	if err != nil {
 		t.Fatalf("Link kısaltma hatası: %v", err)
 	}
@@ -106,7 +108,7 @@ func TestLinkShortening(t *testing.T) {
 	}
 
 	// 2. Özel alias ile kısaltma.
-	aliasLink, err := linkService.ShortenURL("https://github.com", "kod-deposu", 0, user.ID)
+	aliasLink, err := linkService.ShortenURL("https://github.com", "kod-deposu", 0, nil, "", nil, user.ID)
 	if err != nil {
 		t.Fatalf("Özel takma ad ile kısaltma hatası: %v", err)
 	}
@@ -115,19 +117,19 @@ func TestLinkShortening(t *testing.T) {
 	}
 
 	// 3. Aynı alias çakışması engellenmelidir.
-	_, err = linkService.ShortenURL("https://gitlab.com", "kod-deposu", 0, user.ID)
+	_, err = linkService.ShortenURL("https://gitlab.com", "kod-deposu", 0, nil, "", nil, user.ID)
 	if err == nil {
 		t.Fatal("Aynı özel alias ikinci kez kullanılabilmemelidir")
 	}
 
 	// 4. Sistem rezerve kelimeleri engellenmelidir.
-	_, err = linkService.ShortenURL("https://gitlab.com", "login", 0, user.ID)
+	_, err = linkService.ShortenURL("https://gitlab.com", "login", 0, nil, "", nil, user.ID)
 	if err == nil {
 		t.Fatal("Rezerve alias ('login') kullanılamamalıdır")
 	}
 
 	// 5. Protokolsüz URL kısaltma otomatik https:// eklemeli ve başarılı olmalı
-	protoLink, err := linkService.ShortenURL("google.com", "", 0, user.ID)
+	protoLink, err := linkService.ShortenURL("google.com", "", 0, nil, "", nil, user.ID)
 	if err != nil {
 		t.Fatalf("Protokolsüz URL kısaltılamadı: %v", err)
 	}
@@ -142,5 +144,87 @@ func TestLinkShortening(t *testing.T) {
 	}
 	if retrieved.OriginalURL != "https://github.com" {
 		t.Fatalf("Geri çağırılan URL hatalı, beklenen 'https://github.com', alınan: %s", retrieved.OriginalURL)
+	}
+}
+
+// TestAdvancedFeatures TTL, Toggle Active, Reset Stats ve Şifre korumasını test eder.
+func TestAdvancedFeatures(t *testing.T) {
+	userService, linkService, _ := setupTestDB(t)
+	defer db.CloseDB()
+
+	user, err := userService.SetupFirstUser("superadmin", "password123")
+	if err != nil {
+		t.Fatalf("Kullanıcı oluşturulamadı: %v", err)
+	}
+
+	// 1. Aktif/Pasif Toggle Testi
+	activeLink, err := linkService.ShortenURL("https://test.com/active", "toggle-test", 0, nil, "", nil, user.ID)
+	if err != nil {
+		t.Fatalf("Link oluşturulamadı: %v", err)
+	}
+	if !activeLink.IsActive {
+		t.Fatal("Yeni oluşturulan link varsayılan olarak aktif olmalıdır")
+	}
+
+	// Pasife al
+	newStatus, err := linkService.ToggleLinkActive("toggle-test", user.ID, model.RoleSuperadmin)
+	if err != nil || newStatus {
+		t.Fatalf("ToggleActive pasif yapamadı: %v", err)
+	}
+
+	// Pasif link sorgulandığında LINK_INACTIVE hatası dönmeli
+	_, err = linkService.GetOriginalURL("toggle-test")
+	if err == nil || err.Error() != "LINK_INACTIVE" {
+		t.Fatalf("Pasif link için LINK_INACTIVE bekleniyordu, alınan: %v", err)
+	}
+
+	// Tekrar aktife al
+	newStatus, err = linkService.ToggleLinkActive("toggle-test", user.ID, model.RoleSuperadmin)
+	if err != nil || !newStatus {
+		t.Fatalf("ToggleActive tekrar aktif yapamadı: %v", err)
+	}
+
+	// 2. İstatistik Sıfırlama Testi
+	_ = linkService.ResetLinkStats("toggle-test", user.ID, model.RoleSuperadmin)
+	freshLink, _ := linkService.GetLinkByShortCode("toggle-test")
+	if freshLink.ClickCount != 0 {
+		t.Fatalf("Sıfırlama sonrası tıklama 0 olmalı, alınan: %d", freshLink.ClickCount)
+	}
+
+	// 3. Şifre Korumalı Link Testi
+	passLink, err := linkService.ShortenURL("https://secret.com", "secret-link", 0, nil, "gizlisifre", nil, user.ID)
+	if err != nil {
+		t.Fatalf("Şifreli link oluşturulamadı: %v", err)
+	}
+	if !passLink.HasPassword {
+		t.Fatal("Linkin has_password alanı true olmalıdır")
+	}
+
+	// Doğrudan GetOriginalURL çağrıldığında PASSWORD_REQUIRED dönmeli
+	_, err = linkService.GetOriginalURL("secret-link")
+	if err == nil || err.Error() != "PASSWORD_REQUIRED" {
+		t.Fatalf("Şifreli link için PASSWORD_REQUIRED bekleniyordu, alınan: %v", err)
+	}
+
+	// Hatalı şifre ile doğrulama
+	_, err = linkService.VerifyPasswordAndGetURL("secret-link", "yanlissifre")
+	if err == nil {
+		t.Fatal("Hatalı şifre reddedilmeliydi")
+	}
+
+	// Doğru şifre ile doğrulama
+	verified, err := linkService.VerifyPasswordAndGetURL("secret-link", "gizlisifre")
+	if err != nil || verified.OriginalURL != "https://secret.com" {
+		t.Fatalf("Doğru şifre doğrulanmadı: %v", err)
+	}
+
+	// 4. Son Kullanma Tarihi (TTL) Testi
+	futureDate := time.Now().Add(24 * time.Hour).Format("2006-01-02T15:04:05Z")
+	ttlLink, err := linkService.ShortenURL("https://timed.com", "timed-link", 0, &futureDate, "", nil, user.ID)
+	if err != nil {
+		t.Fatalf("TTL link oluşturulamadı: %v", err)
+	}
+	if ttlLink.ExpiresAt == nil {
+		t.Fatal("Linkin expires_at tarihi atanmış olmalı")
 	}
 }

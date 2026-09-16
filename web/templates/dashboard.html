@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yönetim Paneli - Linklik</title>
   <link rel="stylesheet" href="/static/css/styles.css">
-  <!-- Phosphor Icons Light CDN (Pre-approved) -->
+  <!-- Phosphor Icons Light CDN -->
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -27,7 +27,7 @@
   <!-- Ana Uygulama Düzeni (Sidebar + Main Content) -->
   <div class="app-layout">
     
-    <!-- Sol Menü (Sidebar - Siyah Minimalist Görünüm) -->
+    <!-- Sol Menü (Sidebar) -->
     <aside id="appSidebar" class="sidebar">
       <div class="sidebar-brand-wrapper">
         <a href="/" class="brand" style="display: block;">
@@ -46,7 +46,7 @@
           <i class="ph-light ph-chart-bar nav-icon"></i> Detaylı Analiz
         </button>
         <button class="nav-item" onclick="switchTab('api')" id="tabBtn-api">
-          <i class="ph-light ph-key nav-icon"></i> API Bağlantısı
+          <i class="ph-light ph-key nav-icon"></i> API & MCP
         </button>
         {{if eq .User.Role "superadmin"}}
         <button class="nav-item" onclick="switchTab('users')" id="tabBtn-users">
@@ -55,7 +55,7 @@
         {{end}}
       </nav>
 
-      <!-- Sidebar Alt Bilgi (Geliştirilmiş Profil Widget'ı) -->
+      <!-- Sidebar Alt Bilgi (Profil Widget'ı) -->
       <div class="sidebar-footer">
         <div class="user-profile-widget">
           <div class="user-avatar" id="sidebarUserAvatar">U</div>
@@ -81,7 +81,7 @@
     <!-- Sağ Taraf (Ana İçerik) -->
     <main class="app-main">
       
-      <!-- Ana Header (Tema Seçici ve Sayfa Başlığı) -->
+      <!-- Ana Header -->
       <header class="main-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
         <div style="display: flex; align-items: center; gap: 1rem;">
           <button class="mobile-menu-trigger" onclick="toggleSidebar()">
@@ -90,7 +90,6 @@
           <div class="page-title" id="pageTitle">Link Kısaltıcı</div>
         </div>
         
-        <!-- Sağ Üst Tema Seçici Buton -->
         <button class="theme-toggle-btn" onclick="toggleTheme()" title="Temayı Değiştir">
           <i class="ph-light ph-moon" id="themeToggleIcon"></i>
         </button>
@@ -103,27 +102,78 @@
         <div class="shorten-hero-wrapper">
           <div class="shorten-hero-content">
             <h1 class="shorten-hero-title">Bir Bağlantıyı Kısaltın</h1>
-            <p class="shorten-hero-subtitle">Uzun adreslerinizi minimalist, sınırlanabilir ve izlenebilir linklere dönüştürün.</p>
+            <p class="shorten-hero-subtitle">Uzun adreslerinizi minimalist, sınırlanabilir, şifrelenebilir ve izlenebilir linklere dönüştürün.</p>
             
             <div class="glass-card shorten-hero-card">
               <div id="shortenAlert"></div>
               <form id="shortenForm" onsubmit="handleShorten(event)" class="shorten-hero-form">
-                <div class="form-group input-url-group">
-                  <label for="originalUrl">Kısaltılacak Orijinal URL</label>
-                  <input type="text" id="originalUrl" class="form-control" placeholder="example.com" required>
+                <!-- Birincil Giriş Satırı -->
+                <div class="shorten-hero-primary-row">
+                  <div class="form-group input-url-group">
+                    <label for="originalUrl">Kısaltılacak Orijinal URL</label>
+                    <input type="text" id="originalUrl" class="form-control" placeholder="https://example.com/cok-uzun-adres" required autocomplete="off">
+                  </div>
+                  <div class="form-group input-alias-group">
+                    <label for="customAlias">Özel Takma Ad (Alias)</label>
+                    <div class="alias-input-wrapper">
+                      <span class="alias-prefix" id="aliasDomainPrefix">domain.com/</span>
+                      <input type="text" id="customAlias" class="form-control alias-field" placeholder="ozel-ad" autocomplete="off">
+                    </div>
+                  </div>
+                  <div class="form-group input-limit-group">
+                    <label for="maxClicks">Tıklama Sınırı</label>
+                    <input type="number" id="maxClicks" class="form-control" placeholder="0 = Sınırsız" min="0" value="0">
+                  </div>
+                  <button type="submit" id="shortenBtn" class="btn btn-primary hero-shorten-btn">
+                    <i class="ph-light ph-scissors"></i>
+                    <span>Kısalt</span>
+                  </button>
                 </div>
-                <div class="form-group input-alias-group">
-                  <label for="customAlias">Özel Takma Ad (Alias)</label>
-                  <div class="alias-input-wrapper">
-                    <span class="alias-prefix" id="aliasDomainPrefix">domain.com/</span>
-                    <input type="text" id="customAlias" class="form-control alias-field" placeholder="ozel-ad">
+
+                <!-- Gelişmiş Seçenekler Aç/Kapa Kontrol Çubuğu -->
+                <div class="shorten-hero-sub-bar">
+                  <button type="button" class="btn-advanced-toggle" id="advOptToggleBtn" onclick="toggleAdvancedShortenOptions()" title="Zaman aşımı (TTL) ve şifre koruması ayarlarını yapılandırın">
+                    <span class="adv-toggle-icon-wrap"><i class="ph-light ph-sliders-horizontal" id="advOptIcon"></i></span>
+                    <span class="adv-toggle-label">Gelişmiş Seçenekler</span>
+                    <span class="adv-toggle-subtitle">(TTL & Şifre Koruması)</span>
+                    <span class="adv-active-badge hidden" id="advActiveBadge">0 Ayar</span>
+                    <i class="ph-light ph-caret-down adv-chevron" id="advOptChevron"></i>
+                  </button>
+                </div>
+
+                <!-- Gelişmiş Seçenekler Çekmecesi -->
+                <div id="advancedShortenOptions" class="advanced-options-drawer">
+                  <div class="advanced-options-inner">
+                    <div class="advanced-option-card">
+                      <div class="advanced-option-header">
+                        <div class="advanced-option-icon"><i class="ph-light ph-clock-countdown"></i></div>
+                        <div class="advanced-option-meta">
+                          <label for="expiresAt">Bağlantı Geçerlilik Süresi (TTL)</label>
+                          <span class="advanced-option-hint">Belirtilen tarihten sonra bağlantı otomatik devre dışı kalır.</span>
+                        </div>
+                      </div>
+                      <div class="advanced-option-input-wrap">
+                        <input type="datetime-local" id="expiresAt" class="form-control adv-control" oninput="updateAdvBadge()">
+                      </div>
+                    </div>
+
+                    <div class="advanced-option-card">
+                      <div class="advanced-option-header">
+                        <div class="advanced-option-icon"><i class="ph-light ph-lock-key"></i></div>
+                        <div class="advanced-option-meta">
+                          <label for="linkPassword">Erişim Şifresi Koruması</label>
+                          <span class="advanced-option-hint">Ziyaretçilerden yönlendirme öncesinde bu şifre istenir.</span>
+                        </div>
+                      </div>
+                      <div class="advanced-option-input-wrap password-wrapper">
+                        <input type="password" id="linkPassword" class="form-control adv-control" placeholder="Erişim şifresi belirleyin (opsiyonel)" oninput="updateAdvBadge()" autocomplete="new-password">
+                        <button type="button" class="eye-btn" onclick="togglePasswordVisibility('linkPassword', this)" title="Şifreyi Göster/Gizle">
+                          <i class="ph-light ph-eye" id="eye-icon"></i>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div class="form-group input-limit-group">
-                  <label for="maxClicks">Tıklama Sınırı (Limit)</label>
-                  <input type="number" id="maxClicks" class="form-control" placeholder="0 = Sınırsız" min="0" value="0">
-                </div>
-                <button type="submit" id="shortenBtn" class="btn btn-primary hero-shorten-btn">Kısalt</button>
               </form>
             </div>
           </div>
@@ -149,12 +199,27 @@
 
         <!-- Linkler Tablosu -->
         <div class="glass-card">
-          <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">Linkleriniz</h3>
+          <!-- Filtreleme ve Arama Çubuğu -->
+          <div class="filter-bar">
+            <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); margin: 0;">Linkleriniz</h3>
+            
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <div class="filter-tabs">
+                <button class="filter-tab-btn active" onclick="setFilterStatus('')" id="filterBtn-all">Tümü</button>
+                <button class="filter-tab-btn" onclick="setFilterStatus('active')" id="filterBtn-active">Aktif</button>
+                <button class="filter-tab-btn" onclick="setFilterStatus('inactive')" id="filterBtn-inactive">Pasif</button>
+                <button class="filter-tab-btn" onclick="setFilterStatus('expired')" id="filterBtn-expired">Süresi Dolan</button>
+              </div>
+
+              <input type="text" id="linkSearchInput" class="form-control filter-search-input" placeholder="Linklerde ara..." oninput="handleSearchInput(this.value)">
+            </div>
+          </div>
+
           <div class="table-wrapper">
             <table>
               <thead>
                 <tr>
-                  <th>Kısa Link</th>
+                  <th>Kısa Link & Durum</th>
                   <th>Asıl URL</th>
                   <th>Tıklanma / Limit</th>
                   <th>Oluşturulma</th>
@@ -176,7 +241,6 @@
         <div class="glass-card" style="margin-bottom: 1.5rem;">
           <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); margin-bottom: 1.25rem;">Linkleriniz ve Analiz</h3>
           
-          <!-- Üst Alan: Seçim için Link Listesi (Tablolu) -->
           <div class="table-wrapper" style="margin-bottom: 2rem; max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
             <table>
               <thead>
@@ -195,9 +259,14 @@
             </table>
           </div>
 
-          <!-- Alt Alan: Analitik Detay Panelleri (Eğer Seçildiyse Görünür) -->
+          <!-- Analitik Detay Panelleri -->
           <div id="analyticsDetailsWrapper" class="hidden">
-            <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); margin-bottom: 1.25rem;" id="selectedLinkTitle">Analiz Raporu</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px;">
+              <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--text-primary); margin: 0;" id="selectedLinkTitle">Analiz Raporu</h3>
+              <button id="resetStatsBtn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" onclick="handleResetCurrentStats()">
+                <i class="ph-light ph-arrows-counter-clockwise"></i> Bu Linkin İstatistiklerini Sıfırla
+              </button>
+            </div>
 
             <!-- Çizgi Grafik -->
             <div style="position: relative; height:280px; width:100%; margin-bottom: 2rem; background: var(--bg-secondary); border-radius: 12px; padding: 16px; border:1px solid var(--border-color);">
@@ -233,82 +302,108 @@
             </div>
           </div>
 
-          <!-- Boş Durum Ekranı (Empty State) -->
+          <!-- Boş Durum Ekranı -->
           <div id="analyticsEmptyState" style="text-align:center; padding: 3rem 1rem; color:var(--text-secondary);">
             <div style="font-size:2.5rem; margin-bottom:0.75rem;"><i class="ph-light ph-chart-bar" style="color: var(--text-muted);"></i></div>
             <h4>Analiz Edilecek Linki Seçin</h4>
             <p style="font-size:0.85rem; max-width:400px; margin: 6px auto 0 auto; color:var(--text-secondary);">
-              İstatistik detaylarını yüklemek için yukarıdaki listeden analiz etmek istediğiniz linkin yanındaki "Seç ve İncele" butonuna tıklayabilirsiniz.
+              Yukarıdaki listeden bir link seçerek tıklama grafiğini, coğrafi dağılımı ve yönlendiren kaynakları inceleyebilirsiniz.
             </p>
           </div>
         </div>
       </div>
 
-      <!-- 3. SEKME: API ENTEGRASYONU -->
+      <!-- 3. SEKME: API & MCP BAĞLANTISI -->
       <div class="tab-content" id="content-api">
-        <!-- API Bilgi Kartı -->
-        <div class="glass-card" style="margin-bottom: 1.5rem;">
-          <h3 style="font-weight: 700; margin-bottom: 1rem; font-size: 1.2rem; color: var(--text-primary);">API Bağlantı Anahtarınız</h3>
-          <p style="color:var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
-            Dışarıdan sistemimize bağlanmak, kendi otomasyonlarınızı veya yapay zeka ajanlarınızı (AI Agents) entegre etmek için aşağıdaki anahtarı kullanabilirsiniz. Her istekte <code>X-API-KEY</code> başlığı altında gönderilmelidir.
+        <div class="glass-card" style="margin-bottom: 2rem;">
+          <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">X-API-KEY Yönetimi</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem;">
+            Linklik servisini AI Ajanlarınıza (Claude Desktop, Cursor, LangChain vb.), otomasyon betiklerinize bağlamak için bu anahtarı kullanabilirsiniz.
           </p>
 
-          <div style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1.5rem; border-radius:12px; margin-bottom:1.5rem;">
-            <div class="form-group" style="margin-bottom:0;">
-              <label style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:var(--text-primary);">X-API-KEY Değeri</label>
-              <div class="api-key-actions-row" style="display: flex; gap: 8px; align-items: center; margin-top:8px;">
-                <input type="password" id="apiKeyVal" class="form-control" style="font-family: monospace; font-size: 0.9rem; height:42px; background:var(--bg-secondary);" value="{{.User.APIKey}}" readonly>
-                <div class="api-key-buttons" style="display: flex; gap: 8px; flex-shrink: 0;">
-                  <button class="btn btn-secondary" style="height:42px; gap:6px;" onclick="toggleApiKey()">
-                    <i class="ph-light ph-eye"></i> Göster/Gizle
-                  </button>
-                  <button class="btn btn-secondary" style="height:42px; gap:6px;" onclick="copyApiKey()">
-                    <i class="ph-light ph-copy"></i> Kopyala
-                  </button>
-                  <button class="btn btn-danger" style="height:42px; gap:6px;" onclick="regenerateApiKey()">
-                    <i class="ph-light ph-arrows-clockwise"></i> Yenile
-                  </button>
-                </div>
+          <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem;" class="api-key-actions-row">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label for="apiKeyField">Mevcut API Anahtarınız</label>
+              <div style="position: relative;">
+                <input type="password" id="apiKeyField" class="form-control" value="{{.User.APIKey}}" readonly style="font-family: monospace; background: var(--bg-primary); cursor: pointer;" onclick="copyApiKey()">
+                <button type="button" class="eye-btn" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9ca3af; cursor: pointer;" onclick="togglePasswordVisibility('apiKeyField', this)">
+                  <i class="ph-light ph-eye" id="eye-icon"></i>
+                </button>
               </div>
+            </div>
+            <div style="display: flex; gap: 8px;" class="api-key-buttons">
+              <button class="btn btn-secondary" onclick="copyApiKey()">
+                <i class="ph-light ph-copy"></i> Kopyala
+              </button>
+              <button class="btn btn-danger" onclick="handleRegenerateKey()">
+                <i class="ph-light ph-arrows-clockwise"></i> Yenile
+              </button>
             </div>
           </div>
         </div>
 
-        <!-- Kullanım Dokümantasyonu -->
+        <!-- MCP (MODEL CONTEXT PROTOCOL) REHBERİ -->
+        <div class="glass-card" style="margin-bottom: 2rem;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
+            <span style="font-size: 1.4rem;">🤖</span>
+            <h3 style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); margin: 0;">Model Context Protocol (MCP) AI Ajan Entegrasyonu</h3>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.25rem;">
+            Linklik, yerel MCP sunucusu ile donatılmıştır. Cursor veya Claude Desktop doğrudan link kısaltabilir, analitik okuyabilir, linkleri durdurabilir veya istatistiklerini sıfırlayabilir.
+          </p>
+
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">1. Cursor MCP Ayarı (.cursor/mcp.json)</h4>
+          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
+{
+  "mcpServers": {
+    "linklik": {
+      "url": "{{.BaseURL}}/mcp/sse",
+      "headers": {
+        "X-API-KEY": "<span class="doc-api-key">{{.User.APIKey}}</span>"
+      }
+    }
+  }
+}</pre>
+
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">2. Claude Desktop (claude_desktop_config.json)</h4>
+          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
+{
+  "mcpServers": {
+    "linklik": {
+      "command": "linklik",
+      "args": ["--mcp", "--api-key", "<span class="doc-api-key">{{.User.APIKey}}</span>"]
+    }
+  }
+}</pre>
+
+          <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:8px; padding:14px 18px;">
+            <div style="font-weight:700; font-size:0.88rem; color:var(--text-primary); margin-bottom:8px;">Hazır MCP Araçları (Tools):</div>
+            <ul style="margin:0; padding-left:20px; font-size:0.85rem; color:var(--text-secondary); line-height:1.7;">
+              <li><code>shorten_link</code>: Yeni link kısaltma, özel alias, limit ve son kullanma tarihi belirleme.</li>
+              <li><code>list_links</code>: Kullanıcı linklerini arama ve sayfalama ile listeleme.</li>
+              <li><code>get_link_analytics</code>: Detaylı tıklanma, coğrafi ve cihaz istatistiklerini alma.</li>
+              <li><code>toggle_link</code>: Linki tek tıkla durdurma veya yeniden aktifleştirme.</li>
+              <li><code>reset_link_stats</code>: Tıklama sayacını ve tüm analitik geçmişini sıfırlama.</li>
+              <li><code>delete_link</code>: Kısaltılmış linki kalıcı olarak silme.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Standart REST API Kullanımı -->
         <div class="glass-card">
-          <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">Harici API Kullanım Örneği</h3>
+          <h3 style="font-weight: 700; margin-bottom: 1.25rem; font-size: 1.2rem; color: var(--text-primary);">REST API Örnekleri</h3>
           
-          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">1. Link Kısaltma (cURL Örneği)</h4>
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">1. Basit Link Kısaltma (cURL)</h4>
           <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
 curl -X POST {{.BaseURL}}/api/v1/links \
+  -H "X-API-KEY: <span class="doc-api-key">{{.User.APIKey}}</span>" \
   -H "Content-Type: application/json" \
-  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>" \
-  -d '{
-    "url": "https://google.com",
-    "custom_alias": "arama-motoru",
-    "max_clicks": 100
-  }'</pre>
-  
-          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">2. Link Düzenleme (cURL Örneği)</h4>
-          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
-curl -X PUT {{.BaseURL}}/api/v1/links/arama-motoru \
-  -H "Content-Type: application/json" \
-  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>" \
-  -d '{
-    "url": "https://google.com/search",
-    "custom_alias": "google-arama",
-    "max_clicks": 250
-  }'</pre>
-  
-          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">3. Detaylı Yardım Dokümantasyonu (cURL Örneği)</h4>
-          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
-curl -X GET {{.BaseURL}}/api/v1/help \
-  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>"</pre>
- 
-          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">4. Analiz Verisi Çekme (cURL Örneği)</h4>
+  -d '{"url": "https://example.com"}'</pre>
+
+          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">2. Dinamik QR Kod Alma</h4>
           <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary);">
-curl -X GET {{.BaseURL}}/api/v1/analytics/google-arama \
-  -H "X-API-KEY: <span class="doc-api-key" style="font-weight:600;">{{.User.APIKey}}</span>"</pre>
+curl -X GET {{.BaseURL}}/api/v1/links/ozel-ad/qr?size=300 \
+  --output qrcode.png</pre>
         </div>
       </div>
 
@@ -363,6 +458,28 @@ curl -X GET {{.BaseURL}}/api/v1/analytics/google-arama \
     </main>
   </div>
 
+  <!-- QR KOD GÖRÜNTÜLEME MODALI -->
+  <div id="qrModal" class="modal">
+    <div class="glass-card modal-content" style="max-width: 380px; text-align: center;">
+      <div class="modal-header">
+        <h3 style="font-weight: 700; color: var(--text-primary);" id="qrModalTitle">Link QR Kodu</h3>
+        <button class="modal-close" onclick="closeQRModal()">&times;</button>
+      </div>
+      <div style="margin: 1.25rem 0; display:flex; justify-content:center;">
+        <div style="background:#fff; padding:16px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); display:inline-block;">
+          <img id="qrModalImage" src="" alt="QR Kod" style="width: 220px; height: 220px; display: block;">
+        </div>
+      </div>
+      <p id="qrModalLinkText" style="font-size:0.85rem; color:var(--text-secondary); word-break:break-all; margin-bottom:1.5rem;"></p>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <a id="qrDownloadBtn" href="" download="" class="btn btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+          <i class="ph-light ph-download-simple"></i> PNG İndir
+        </a>
+        <button type="button" class="btn btn-secondary" onclick="closeQRModal()">Kapat</button>
+      </div>
+    </div>
+  </div>
+
   <!-- LİNK DÜZENLEME MODALI -->
   <div id="editLinkModal" class="modal">
     <div class="glass-card modal-content" style="max-width: 500px;">
@@ -390,7 +507,22 @@ curl -X GET {{.BaseURL}}/api/v1/analytics/google-arama \
         <div class="form-group">
           <label for="editMaxClicks">Maksimum Tıklanma Limiti</label>
           <input type="number" id="editMaxClicks" class="form-control" min="0" placeholder="0 = Sınırsız">
-          <small style="color:var(--text-secondary); font-size:0.75rem; margin-top:4px; display:block;">Tıklama sayısı bu sınıra ulaştığında bağlantı pasifleşir.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="editExpiresAt">Son Kullanma Tarihi (TTL)</label>
+          <input type="datetime-local" id="editExpiresAt" class="form-control">
+          <small style="color:var(--text-secondary); font-size:0.75rem;">Süreyi kaldırmak için kutuyu temizleyin.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="editPassword">Yeni Erişim Şifresi</label>
+          <input type="password" id="editPassword" class="form-control" placeholder="Değiştirmemek için boş bırakın, kaldırmak için 'remove' yazın">
+        </div>
+
+        <div class="form-group" style="display:flex; align-items:center; gap:8px; margin-top:0.5rem;">
+          <input type="checkbox" id="editIsActive" style="width:18px; height:18px; cursor:pointer;">
+          <label for="editIsActive" style="margin-bottom:0; cursor:pointer; font-weight:600;">Bağlantı Aktif (Tıklamaya Açık)</label>
         </div>
         
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:1.5rem;">

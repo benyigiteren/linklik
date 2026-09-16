@@ -48,74 +48,15 @@ func InitDB(dbPath string) error {
 		}
 	}
 
-	// Tabloları oluştur
-	if err := createTables(); err != nil {
-		return fmt.Errorf("tablolar oluşturulamadı: %v", err)
+	// Şema göçlerini çalıştır
+	if err := RunMigrations(Db); err != nil {
+		return fmt.Errorf("veritabanı şema göçleri başarısız: %v", err)
 	}
-
-	// Göç İşlemi: max_clicks kolonu yoksa ekle
-	_, _ = Db.Exec("ALTER TABLE links ADD COLUMN max_clicks INTEGER DEFAULT 0;")
 
 	log.Printf("SQLite veritabanı başarıyla başlatıldı: %s (WAL Modu Aktif)", dbPath)
 	return nil
 }
 
-// createTables veritabanı şemasını oluşturur.
-func createTables() error {
-	queries := []string{
-		// Kullanıcılar tablosu
-		`CREATE TABLE IF NOT EXISTS users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			role TEXT NOT NULL,
-			api_key TEXT UNIQUE NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		);`,
-
-		// Linkler tablosu (max_clicks kolonu eklendi)
-		`CREATE TABLE IF NOT EXISTS links (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			original_url TEXT NOT NULL,
-			short_code TEXT UNIQUE NOT NULL,
-			custom_alias TEXT UNIQUE,
-			created_by_id INTEGER NOT NULL,
-			click_count INTEGER DEFAULT 0,
-			max_clicks INTEGER DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (created_by_id) REFERENCES users (id) ON DELETE CASCADE
-		);`,
-
-		// Analitik tablosu
-		`CREATE TABLE IF NOT EXISTS analytics (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			link_id INTEGER NOT NULL,
-			ip_address TEXT,
-			referrer TEXT,
-			user_agent TEXT,
-			browser TEXT,
-			os TEXT,
-			country TEXT,
-			clicked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (link_id) REFERENCES links (id) ON DELETE CASCADE
-		);`,
-
-		// İndeksler (Sorgu performansları için)
-		`CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key);`,
-		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);`,
-		`CREATE INDEX IF NOT EXISTS idx_links_short_code ON links(short_code);`,
-		`CREATE INDEX IF NOT EXISTS idx_links_custom_alias ON links(custom_alias);`,
-		`CREATE INDEX IF NOT EXISTS idx_analytics_link_id ON analytics(link_id);`,
-	}
-
-	for _, query := range queries {
-		if _, err := Db.Exec(query); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 // CloseDB veritabanı bağlantısını güvenli bir şekilde kapatır.
 func CloseDB() {
