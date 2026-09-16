@@ -1,5 +1,3 @@
-version: '3.8'
-
 volumes:
   linklik_data:
 
@@ -12,19 +10,15 @@ services:
     container_name: linklik-app
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${HOST_PORT:-8080}:8080"
     volumes:
       - linklik_data:/app/data
     environment:
       - PORT=8080
       - DB_PATH=/app/data/linklik.db
-      - BASE_URL=http://localhost:8080
-      # Güvenlik: JWT_SECRET (eskiden yanlış ad JWT_SECRET_KEY idi, uygulama okuyamıyordu;
-      # her restart'ta rastgele anahtar üretiyordu). Min 32 byte olmalı.
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET zorunlu, en az 32 karakter olmali}
-      # Çerez Secure bayrağı: HTTPS sonlandırmalı proxy arkasında true ayarlayın.
-      - COOKIE_SECURE=false
-    # Güvenlik sertleştirme
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     read_only: true
     tmpfs:
       - /tmp
