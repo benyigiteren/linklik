@@ -177,14 +177,47 @@ async function handleLogout() {
 function copyApiKey() {
   const input = document.getElementById('apiKeyField');
   if (input) {
-    navigator.clipboard.writeText(input.value);
-    showToast("API Anahtarı panoya kopyalandı!");
+    copyText(input.value, "API Anahtarı panoya kopyalandı!");
   }
 }
 
 function copyShortUrl(url) {
-  navigator.clipboard.writeText(url);
-  showToast("Kısa bağlantı kopyalandı!");
+  copyText(url, "Kısa bağlantı kopyalandı!");
+}
+
+function copyText(text, successMsg = "Panoya kopyalandı!") {
+  if (!text) return;
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(successMsg);
+    }).catch(() => {
+      fallbackCopyText(text, successMsg);
+    });
+  } else {
+    fallbackCopyText(text, successMsg);
+  }
+}
+
+function fallbackCopyText(text, successMsg) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (successful) {
+      showToast(successMsg);
+    } else {
+      prompt("Kopyalamak için Ctrl+C tuşlarına basın:", text);
+    }
+  } catch (err) {
+    prompt("Kopyalamak için Ctrl+C tuşlarına basın:", text);
+  }
 }
 
 async function handleRegenerateKey() {
@@ -202,6 +235,12 @@ async function handleRegenerateKey() {
       const docKeys = document.querySelectorAll('.doc-api-key');
       docKeys.forEach(el => el.innerText = newKey);
       
+      const mcpInput = document.getElementById('mcpUniversalUrlInput');
+      if (mcpInput) {
+        const base = mcpInput.dataset.base || window.location.origin;
+        mcpInput.value = `${base}/mcp?api_key=${newKey}`;
+      }
+
       showToast("API Anahtarı başarıyla yenilendi");
     } else {
       alert("Hata: " + data.error);

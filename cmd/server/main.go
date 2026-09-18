@@ -55,6 +55,7 @@ func main() {
 	qrHandler := handler.NewQRHandler(linkService)
 	healthHandler := handler.NewHealthHandler(db.Db)
 	mcpHandler := handler.NewMCPHandler(linkService, analyticsService, userService)
+	openAPIHandler := handler.NewOpenAPIHandler()
 
 	// Eğer --mcp parametresi verilmişse stdio üzerinden çalıştır
 	if *mcpMode {
@@ -110,14 +111,31 @@ func main() {
 	// QR Kod Uç Noktası (Önbelleklenebilir ve genel/erişilebilir)
 	r.Get("/api/v1/links/{short_code}/qr", qrHandler.GenerateQR)
 
+	// OpenAPI 3.0 Şeması (ChatGPT Actions, Swagger ve AI Ajanları)
+	r.Get("/openapi.json", openAPIHandler.HandleOpenAPI)
+	r.Get("/api/v1/openapi.json", openAPIHandler.HandleOpenAPI)
+
 	// ==========================================
-	// 9. MCP (MODEL CONTEXT PROTOCOL) ROTALARI
+	// 9. MODEL CONTEXT PROTOCOL (MCP) EVRENSEL ROTALARI
 	// ==========================================
-	r.Group(func(r chi.Router) {
-		r.Get("/mcp/sse", mcpHandler.HandleSSE)
-		r.Post("/mcp/message", mcpHandler.HandleMessage)
-		r.Post("/mcp", mcpHandler.HandleMessage)
+	r.Route("/mcp", func(r chi.Router) {
+		r.Use(middleware.RateLimit(300, time.Minute))
+		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY")
+			w.WriteHeader(http.StatusNoContent)
+		})
+		// Tek ve evrensel MCP uç noktası: GET -> SSE akışı, POST -> JSON-RPC (Streamable HTTP)
+		r.Get("/", mcpHandler.HandleUnified)
+		r.Post("/", mcpHandler.HandleMessage)
+		// Standart alt rotalar (SSE & Message)
+		r.Get("/sse", mcpHandler.HandleSSE)
+		r.Post("/message", mcpHandler.HandleMessage)
 	})
+	// Kök dizin takma adları (bazı MCP istemcileri için)
+	r.Get("/sse", mcpHandler.HandleSSE)
+	r.Post("/message", mcpHandler.HandleMessage)
 
 	// ==========================================
 	// 10. YETKİLİ API ROTALARI (API-Key VEYA Oturum Destekli)

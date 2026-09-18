@@ -342,50 +342,108 @@
           </div>
         </div>
 
-        <!-- MCP (MODEL CONTEXT PROTOCOL) REHBERİ -->
+        <!-- MCP (MODEL CONTEXT PROTOCOL) EVRENSEL REHBERİ -->
         <div class="glass-card" style="margin-bottom: 2rem;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
-            <span style="font-size: 1.4rem;">🤖</span>
-            <h3 style="font-weight: 700; font-size: 1.15rem; color: var(--text-primary); margin: 0;">Model Context Protocol (MCP) AI Ajan Entegrasyonu</h3>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.5rem;">⚡</span>
+              <div>
+                <h3 style="font-weight: 700; font-size: 1.25rem; color: var(--text-primary); margin: 0;">Model Context Protocol (MCP)</h3>
+                <span style="font-size: 0.78rem; color: var(--text-muted);">Tüm AI Ajanları İçin Evrensel Açık Standart</span>
+              </div>
+            </div>
+            <span class="status-badge active" style="font-size: 0.75rem; text-transform: none; letter-spacing: normal;">
+              <i class="ph-light ph-check-circle"></i> Canlı & Standart Uyumlu
+            </span>
           </div>
-          <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.25rem;">
-            Linklik, yerel MCP sunucusu ile donatılmıştır. Cursor veya Claude Desktop doğrudan link kısaltabilir, analitik okuyabilir, linkleri durdurabilir veya istatistiklerini sıfırlayabilir.
+
+          <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.65; margin-bottom: 1.5rem;">
+            Model Context Protocol (MCP), yapay zeka modellerinin harici araçlarla konuşmasını sağlayan küresel protokoldür. 
+            <strong>Claude Code</strong>, <strong>Cursor</strong>, <strong>ChatGPT (Developer Mode / MCP)</strong>, <strong>Gemini CLI</strong>, <strong>Claude Desktop</strong> ve tüm MCP uyumlu araçlar aşağıdaki <strong>tek standart URL</strong> ile Linklik servisinize doğrudan bağlanabilir.
           </p>
 
-          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">1. Cursor MCP Ayarı (.cursor/mcp.json)</h4>
-          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
+          <!-- 1. Evrensel Tek URL ile Bağlantı -->
+          <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <label for="mcpUniversalUrlInput" style="font-weight: 700; font-size: 0.88rem; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                <i class="ph-light ph-link"></i> Evrensel MCP Bağlantı Adresi (URL)
+              </label>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">Tüm AI istemcilerinde geçerlidir</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" id="mcpUniversalUrlInput" class="form-control" value="{{.BaseURL}}/mcp?api_key={{.User.APIKey}}" readonly data-base="{{.BaseURL}}" style="font-family: monospace; font-size: 0.88rem; background: var(--bg-secondary); cursor: pointer;" onclick="this.select()">
+              <button class="btn btn-primary" style="flex-shrink: 0; height: 42px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px;" onclick="copyText(document.getElementById('mcpUniversalUrlInput').value, 'Evrensel MCP URL kopyalandı!')">
+                <i class="ph-light ph-copy"></i> Kopyala
+              </button>
+            </div>
+            <small style="display: block; margin-top: 6px; color: var(--text-muted); font-size: 0.75rem;">
+              Bu adresi AI aracınızın MCP Server URL bölümüne yapıştırmanız yeterlidir. Hem HTTP hem SSE protokolü aynı adresten otomatik sunulur.
+            </small>
+          </div>
+
+          <!-- 2. Standart JSON Yapılandırması (mcp.json) -->
+          <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
+                <i class="ph-light ph-code"></i> Standart Yapılandırma Formatı (mcp.json)
+              </h4>
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 10px; height: auto;" onclick="copyText(`{\n  &quot;mcpServers&quot;: {\n    &quot;linklik&quot;: {\n      &quot;url&quot;: &quot;{{.BaseURL}}/mcp?api_key={{.User.APIKey}}&quot;\n    }\n  }\n}`, 'mcp.json yapılandırması kopyalandı!')">
+                <i class="ph-light ph-copy"></i> JSON Kopyala
+              </button>
+            </div>
+            <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin:0;">
 {
   "mcpServers": {
     "linklik": {
-      "url": "{{.BaseURL}}/mcp/sse",
-      "headers": {
-        "X-API-KEY": "<span class="doc-api-key">{{.User.APIKey}}</span>"
-      }
+      "url": "{{.BaseURL}}/mcp?api_key=<span class="doc-api-key">{{.User.APIKey}}</span>"
     }
   }
 }</pre>
+          </div>
 
-          <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-primary);">2. Claude Desktop (claude_desktop_config.json)</h4>
-          <pre style="background:var(--bg-primary); border:1px solid var(--border-color); padding:1rem; border-radius:8px; overflow-x:auto; font-family:monospace; font-size:0.85rem; color:var(--text-primary); margin-bottom:1.5rem;">
-{
-  "mcpServers": {
-    "linklik": {
-      "command": "linklik",
-      "args": ["--mcp", "--api-key", "<span class="doc-api-key">{{.User.APIKey}}</span>"]
-    }
-  }
-}</pre>
+          <!-- 3. Hızlı Bağlantı Seçenekleri (Claude Code, Header & OpenAPI) -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <!-- Terminal / Claude Code CLI -->
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                <i class="ph-light ph-terminal-window"></i> Terminal / CLI ile Ekleme
+              </div>
+              <pre style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 8px; border-radius: 6px; font-size: 0.75rem; overflow-x: auto; color: var(--text-primary); margin: 0 0 6px 0;">claude mcp add --transport http linklik {{.BaseURL}}/mcp --header "Authorization: Bearer <span class="doc-api-key">{{.User.APIKey}}</span>"</pre>
+              <button class="btn btn-secondary" style="font-size: 0.72rem; padding: 3px 8px; height: auto; width: 100%;" onclick="copyText(`claude mcp add --transport http linklik {{.BaseURL}}/mcp --header &quot;Authorization: Bearer {{.User.APIKey}}&quot;`, 'Komut kopyalandı!')">
+                <i class="ph-light ph-copy"></i> Komutu Kopyala
+              </button>
+            </div>
 
+            <!-- ChatGPT Actions / OpenAPI Şeması -->
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                <i class="ph-light ph-robot"></i> ChatGPT / OpenAPI Şeması
+              </div>
+              <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; line-height: 1.4;">
+                ChatGPT Custom GPT Actions veya OpenAPI şeması isteyen araçlar için hazır canlı şema:
+              </p>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" readonly value="{{.BaseURL}}/openapi.json" class="form-control" style="font-size: 0.75rem; height: 32px; font-family: monospace; background: var(--bg-secondary);" onclick="this.select()">
+                <button class="btn btn-secondary" style="font-size: 0.72rem; padding: 0 10px; height: 32px; flex-shrink: 0;" onclick="copyText('{{.BaseURL}}/openapi.json', 'OpenAPI adresi kopyalandı!')">
+                  <i class="ph-light ph-copy"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Hazır Araçlar (Tools) Vitrini -->
           <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:8px; padding:14px 18px;">
-            <div style="font-weight:700; font-size:0.88rem; color:var(--text-primary); margin-bottom:8px;">Hazır MCP Araçları (Tools):</div>
-            <ul style="margin:0; padding-left:20px; font-size:0.85rem; color:var(--text-secondary); line-height:1.7;">
-              <li><code>shorten_link</code>: Yeni link kısaltma, özel alias, limit ve son kullanma tarihi belirleme.</li>
-              <li><code>list_links</code>: Kullanıcı linklerini arama ve sayfalama ile listeleme.</li>
-              <li><code>get_link_analytics</code>: Detaylı tıklanma, coğrafi ve cihaz istatistiklerini alma.</li>
-              <li><code>toggle_link</code>: Linki tek tıkla durdurma veya yeniden aktifleştirme.</li>
-              <li><code>reset_link_stats</code>: Tıklama sayacını ve tüm analitik geçmişini sıfırlama.</li>
-              <li><code>delete_link</code>: Kısaltılmış linki kalıcı olarak silme.</li>
-            </ul>
+            <div style="font-weight:700; font-size:0.88rem; color:var(--text-primary); margin-bottom:10px; display: flex; align-items: center; gap: 6px;">
+              <i class="ph-light ph-wrench"></i> AI Tarafından Kullanılabilen Hazır MCP Araçları (6 Tools):
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;">
+              <div style="font-size: 0.825rem; color: var(--text-secondary);"><code style="font-weight: 600; color: var(--text-primary);">shorten_link</code>: URL kısaltma, alias, limit, TTL ve şifre belirleme</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary);"><code style="font-weight: 600; color: var(--text-primary);">list_links</code>: Linkleri arama, filtre ve sayfalama ile listeleme</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary);"><code style="font-weight: 600; color: var(--text-primary);">get_link_analytics</code>: Tıklanma, ülke, tarayıcı ve zaman analitiği</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary);"><code style="font-weight: 600; color: var(--text-primary);">toggle_link</code>: Linki anında durdurma veya aktifleştirme</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary);"><code style="font-weight: 600; color: var(--text-primary);">reset_link_stats</code>: Tıklama sayacını ve analitik geçmişini sıfırlama</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary);"><code style="font-weight: 600; color: var(--text-primary);">delete_link</code>: Kısaltılmış linki kalıcı olarak silme</div>
+            </div>
           </div>
         </div>
 

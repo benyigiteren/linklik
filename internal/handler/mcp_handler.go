@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"bufio"
@@ -18,12 +18,18 @@ import (
 	"sync"
 )
 
+type mcpSession struct {
+	msgChan chan []byte
+	user    *model.User
+	apiKey  string
+}
+
 // MCPHandler Model Context Protocol (MCP) isteklerini karşılayan handler'dır.
 type MCPHandler struct {
 	linkService      *service.LinkService
 	analyticsService *service.AnalyticsService
 	userService      *service.UserService
-	sessions         sync.Map // sessionId -> chan []byte
+	sessions         sync.Map // sessionId -> *mcpSession
 }
 
 // NewMCPHandler yeni bir MCPHandler oluşturur.
@@ -49,32 +55,114 @@ type jsonRPCResponse struct {
 	Error   interface{} `json:"error,omitempty"`
 }
 
-// HandleSSE AI istemcileri (Cursor, Claude vb.) için SSE akışını başlatır.
+// extractUser istekten (Context, Header veya Query parametresi) kullanıcıyı ve API anahtarını ayıklar.
+func (h *MCPHandler) extractUser(r *http.Request) (*model.User, string) {
+	// 1. Context'ten (middleware oturumu veya API anahtarı)
+	if user := middleware.GetUserFromContext(r.Context()); user != nil {
+		return user, user.APIKey
+	}
+
+	// 2. X-API-KEY başlığı
+	apiKey := r.Header.Get("X-API-KEY")
+
+	// 3. Authorization: Bearer <key> başlığı
+	if apiKey == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+
+	// 4. URL Query parametreleri (?api_key=, ?apiKey=, ?token=, ?key=)
+	if apiKey == "" {
+		apiKey = r.URL.Query().Get("api_key")
+		if apiKey == "" {
+			apiKey = r.URL.Query().Get("apiKey")
+		}
+		if apiKey == "" {
+			apiKey = r.URL.Query().Get("token")
+		}
+		if apiKey == "" {
+			apiKey = r.URL.Query().Get("key")
+		}
+	}
+
+	if apiKey != "" {
+		u, err := h.userService.GetUserByAPIKey(apiKey)
+		if err == nil && u != nil {
+			return u, apiKey
+		}
+	}
+
+	return nil, apiKey
+}
+
+// HandleUnified tek bir standart URL (/mcp) üzerinden hem SSE hem Streamable HTTP desteği sunar.
+// GET /mcp -> SSE akışını başlatır.
+// POST /mcp -> Doğrudan JSON-RPC mesajını işler.
+func (h *MCPHandler) HandleUnified(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		h.HandleMessage(w, r)
+		return
+	}
+	h.HandleSSE(w, r)
+}
+
+// HandleSSE AI istemcileri (Claude Code, Cursor, Gemini, Claude Desktop vb.) için SSE akışını başlatır.
 func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "SSE desteklenmiyor", http.StatusInternalServerError)
 		return
 	}
 
+	user, apiKey := h.extractUser(r)
+
 	sessionBytes := make([]byte, 16)
 	_, _ = rand.Read(sessionBytes)
 	sessionID := hex.EncodeToString(sessionBytes)
 
-	msgChan := make(chan []byte, 32)
-	h.sessions.Store(sessionID, msgChan)
+	sess := &mcpSession{
+		msgChan: make(chan []byte, 64),
+		user:    user,
+		apiKey:  apiKey,
+	}
+	h.sessions.Store(sessionID, sess)
 	defer func() {
 		h.sessions.Delete(sessionID)
-		close(msgChan)
+		close(sess.msgChan)
 	}()
 
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
 
-	// İstemciye mesaj gönderim endpoint URL'ini bildir
-	endpointURL := fmt.Sprintf("/mcp/message?sessionId=%s", sessionID)
+	// İstemciye mesaj gönderim endpoint URL'ini bildir (api_key parametresini koru)
+	queryParts := []string{fmt.Sprintf("sessionId=%s", sessionID)}
+	if apiKey != "" {
+		queryParts = append(queryParts, fmt.Sprintf("api_key=%s", apiKey))
+	} else if r.URL.RawQuery != "" {
+		queryParts = append(queryParts, r.URL.RawQuery)
+	}
+	endpointQuery := strings.Join(queryParts, "&")
+
+	var endpointURL string
+	if config.GlobalConfig != nil && config.GlobalConfig.BaseURL != "" {
+		baseURL := strings.TrimRight(config.GlobalConfig.BaseURL, "/")
+		endpointURL = fmt.Sprintf("%s/mcp/message?%s", baseURL, endpointQuery)
+	} else {
+		endpointURL = fmt.Sprintf("/mcp/message?%s", endpointQuery)
+	}
+
 	_, _ = fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", endpointURL)
 	flusher.Flush()
 
@@ -83,7 +171,7 @@ func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-notify:
 			return
-		case msg, ok := <-msgChan:
+		case msg, ok := <-sess.msgChan:
 			if !ok {
 				return
 			}
@@ -95,28 +183,23 @@ func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
 
 // HandleMessage SSE oturumu üzerinden gelen veya doğrudan POST edilen JSON-RPC isteklerini karşılar.
 func (h *MCPHandler) HandleMessage(w http.ResponseWriter, r *http.Request) {
-	user := middleware.GetUserFromContext(r.Context())
-	if user == nil {
-		// 1. X-API-KEY başlığı
-		apiKey := r.Header.Get("X-API-KEY")
-		if apiKey == "" {
-			// 2. Authorization: Bearer <key>
-			authHeader := r.Header.Get("Authorization")
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				apiKey = strings.TrimPrefix(authHeader, "Bearer ")
-			}
-		}
-		if apiKey == "" {
-			// 3. URL Query param ?api_key= (SSE istemcileri için)
-			apiKey = r.URL.Query().Get("api_key")
-			if apiKey == "" {
-				apiKey = r.URL.Query().Get("apiKey")
-			}
-		}
-		if apiKey != "" {
-			u, err := h.userService.GetUserByAPIKey(apiKey)
-			if err == nil && u != nil {
-				user = u
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	user, _ := h.extractUser(r)
+	sessionID := r.URL.Query().Get("sessionId")
+	var activeSession *mcpSession
+
+	if sessionID != "" {
+		if val, ok := h.sessions.Load(sessionID); ok {
+			activeSession = val.(*mcpSession)
+			if user == nil && activeSession.user != nil {
+				user = activeSession.user
 			}
 		}
 	}
@@ -127,21 +210,21 @@ func (h *MCPHandler) HandleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID := r.URL.Query().Get("sessionId")
 	respBytes := h.ProcessRequest(r.Context(), body, user)
 
-	// Eğer aktif bir SSE oturumu varsa yanıtı oraya da gönder
-	if sessionID != "" {
-		if val, ok := h.sessions.Load(sessionID); ok {
-			ch := val.(chan []byte)
-			select {
-			case ch <- respBytes:
-			default:
-			}
+	// Eğer aktif bir SSE oturumu varsa yanıtı SSE akışına da ilet
+	if activeSession != nil && len(respBytes) > 0 {
+		select {
+		case activeSession.msgChan <- respBytes:
+		default:
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if len(respBytes) == 0 {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(respBytes)
 }
@@ -157,75 +240,136 @@ func (h *MCPHandler) ProcessRequest(ctx context.Context, data []byte, user *mode
 		return resp
 	}
 
+	// JSON-RPC bildirimi (notification) kontrolü
+	isNotification := req.ID == nil
+
 	var res jsonRPCResponse
 	res.JSONRPC = "2.0"
 	res.ID = req.ID
 
 	switch req.Method {
 	case "initialize":
+		var initParams struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		}
+		_ = json.Unmarshal(req.Params, &initParams)
+		protoVer := "2024-11-05"
+		if initParams.ProtocolVersion != "" {
+			protoVer = initParams.ProtocolVersion
+		}
+
 		res.Result = map[string]interface{}{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": protoVer,
 			"capabilities": map[string]interface{}{
-				"tools": map[string]interface{}{},
+				"tools": map[string]interface{}{
+					"listChanged": false,
+				},
+				"resources": map[string]interface{}{
+					"subscribe":   false,
+					"listChanged": false,
+				},
+				"prompts": map[string]interface{}{
+					"listChanged": false,
+				},
 			},
 			"serverInfo": map[string]interface{}{
-				"name":    "linklik-mcp",
+				"name":    "linklik",
 				"version": "1.0.0",
 			},
 		}
 
-	case "notifications/initialized":
+	case "notifications/initialized", "initialized":
+		return nil
+
+	case "notifications/cancelled", "$/cancelRequest":
 		return nil
 
 	case "ping":
 		res.Result = map[string]interface{}{}
 
-	case "tools/list":
-		if user == nil {
-			res.Error = map[string]interface{}{
-				"code":    -32000,
-				"message": "Yetkilendirme gerekli. Lütfen X-API-KEY başlığı veya parametresi sağlayın.",
-			}
-			break
+	case "resources/list":
+		res.Result = map[string]interface{}{
+			"resources": []interface{}{},
 		}
+
+	case "resources/templates/list":
+		res.Result = map[string]interface{}{
+			"resourceTemplates": []interface{}{},
+		}
+
+	case "prompts/list":
+		res.Result = map[string]interface{}{
+			"prompts": []interface{}{},
+		}
+
+	case "completion/complete":
+		res.Result = map[string]interface{}{
+			"completion": map[string]interface{}{
+				"values":  []interface{}{},
+				"hasMore": false,
+			},
+		}
+
+	case "logging/setLevel":
+		res.Result = map[string]interface{}{}
+
+	case "tools/list":
 		res.Result = map[string]interface{}{
 			"tools": h.getToolsList(),
 		}
 
 	case "tools/call":
-		if user == nil {
-			res.Error = map[string]interface{}{
-				"code":    -32000,
-				"message": "Yetkilendirme gerekli. Lütfen X-API-KEY başlığı veya parametresi sağlayın.",
-			}
-			break
-		}
 		var callParams struct {
 			Name      string          `json:"name"`
 			Arguments json.RawMessage `json:"arguments"`
 		}
 		if err := json.Unmarshal(req.Params, &callParams); err != nil {
 			res.Error = map[string]interface{}{"code": -32602, "message": "Geçersiz parametreler"}
+			break
+		}
+
+		if user == nil {
+			res.Result = map[string]interface{}{
+				"isError": true,
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": "Yetkilendirme Hatası: Bu işlemi gerçekleştirmek için geçerli bir Linklik API anahtarı gereklidir. Lütfen MCP sunucu adresine ?api_key= parametresi veya Authorization: Bearer başlığı ekleyin.",
+					},
+				},
+			}
+			break
+		}
+
+		toolResult, err := h.executeTool(callParams.Name, callParams.Arguments, user)
+		if err != nil {
+			res.Result = map[string]interface{}{
+				"isError": true,
+				"content": []map[string]interface{}{
+					{"type": "text", "text": fmt.Sprintf("Hata: %v", err)},
+				},
+			}
 		} else {
-			toolResult, err := h.executeTool(callParams.Name, callParams.Arguments, user)
-			if err != nil {
-				res.Result = map[string]interface{}{
-					"isError": true,
-					"content": []map[string]interface{}{
-						{"type": "text", "text": fmt.Sprintf("Hata: %v", err)},
-					},
-				}
-			} else {
-				res.Result = map[string]interface{}{
-					"content": []map[string]interface{}{
-						{"type": "text", "text": toolResult},
-					},
-				}
+			res.Result = map[string]interface{}{
+				"isError": false,
+				"content": []map[string]interface{}{
+					{"type": "text", "text": toolResult},
+				},
 			}
 		}
 
 	default:
-		res.Error = map[string]interface{}{"code": -32601, "message": "Metot bulunamadı"}
+		if isNotification {
+			return nil
+		}
+		res.Error = map[string]interface{}{
+			"code":    -32601,
+			"message": fmt.Sprintf("Metot desteklenmiyor: %s", req.Method),
+		}
+	}
+
+	if isNotification {
+		return nil
 	}
 
 	respBytes, _ := json.Marshal(res)
@@ -236,14 +380,15 @@ func (h *MCPHandler) getToolsList() []map[string]interface{} {
 	return []map[string]interface{}{
 		{
 			"name":        "shorten_link",
-			"description": "Yeni bir URL'i kısaltır. İsteğe bağlı olarak özel takma ad (custom_alias), tıklama sınırı (max_clicks), son kullanma tarihi ve aktiflik durumu belirlenebilir.",
+			"description": "Yeni bir URL kısaltır. Özel takma ad (custom_alias), tıklama sınırı (max_clicks), son kullanma tarihi (expires_at) ve erişim şifresi (password) belirlenebilir.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"url":          map[string]interface{}{"type": "string", "description": "Kısaltılacak tam web adresi (örn: https://example.com)"},
 					"custom_alias": map[string]interface{}{"type": "string", "description": "İsteğe bağlı özel kısa kod/takma ad"},
-					"max_clicks":   map[string]interface{}{"type": "number", "description": "Maksimum tıklanma sınırı (0 veya boş = sınırsız)"},
-					"expires_at":   map[string]interface{}{"type": "string", "description": "Son kullanma tarihi (örn: 2026-12-31T23:59:00Z)"},
+					"max_clicks":   map[string]interface{}{"type": "integer", "description": "Maksimum tıklanma sınırı (0 veya boş = sınırsız)"},
+					"expires_at":   map[string]interface{}{"type": "string", "description": "Son kullanma tarihi (ISO 8601, örn: 2026-12-31T23:59:00Z)"},
+					"password":     map[string]interface{}{"type": "string", "description": "Ziyaretçilerden istenecek erişim şifresi (opsiyonel)"},
 					"is_active":    map[string]interface{}{"type": "boolean", "description": "Linkin başlangıç aktiflik durumu (varsayılan: true)"},
 				},
 				"required": []string{"url"},
@@ -255,10 +400,10 @@ func (h *MCPHandler) getToolsList() []map[string]interface{} {
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"page":   map[string]interface{}{"type": "number", "description": "Sayfa numarası (varsayılan: 1)"},
-					"limit":  map[string]interface{}{"type": "number", "description": "Sayfa başına kayıt (varsayılan: 20)"},
+					"page":   map[string]interface{}{"type": "integer", "description": "Sayfa numarası (varsayılan: 1)"},
+					"limit":  map[string]interface{}{"type": "integer", "description": "Sayfa başına kayıt (varsayılan: 20)"},
 					"search": map[string]interface{}{"type": "string", "description": "URL veya kısa kod içinde aranacak metin"},
-					"status": map[string]interface{}{"type": "string", "enum": []string{"active", "inactive", "expired"}, "description": "Durum filtresi"},
+					"status": map[string]interface{}{"type": "string", "enum": []string{"all", "active", "inactive", "expired"}, "description": "Durum filtresi"},
 				},
 			},
 		},
@@ -317,16 +462,17 @@ func (h *MCPHandler) executeTool(name string, argsRaw json.RawMessage, user *mod
 			CustomAlias string  `json:"custom_alias"`
 			MaxClicks   int64   `json:"max_clicks"`
 			ExpiresAt   *string `json:"expires_at"`
+			Password    string  `json:"password"`
 			IsActive    *bool   `json:"is_active"`
 		}
 		if err := json.Unmarshal(argsRaw, &p); err != nil {
 			return "", err
 		}
-		link, err := h.linkService.ShortenURL(p.URL, p.CustomAlias, p.MaxClicks, p.ExpiresAt, "", p.IsActive, user.ID)
+		link, err := h.linkService.ShortenURL(p.URL, p.CustomAlias, p.MaxClicks, p.ExpiresAt, p.Password, p.IsActive, user.ID)
 		if err != nil {
 			return "", err
 		}
-		shortURL := fmt.Sprintf("%s/%s", config.GlobalConfig.BaseURL, link.ShortCode)
+		shortURL := fmt.Sprintf("%s/%s", strings.TrimRight(config.GlobalConfig.BaseURL, "/"), link.ShortCode)
 		return fmt.Sprintf("Link başarıyla kısaltıldı!\nKısa URL: %s\nKısa Kod: %s\nHedef: %s", shortURL, link.ShortCode, link.OriginalURL), nil
 
 	case "list_links":
