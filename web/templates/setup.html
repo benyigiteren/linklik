@@ -226,6 +226,9 @@
 
       <!-- Sağ Panel: Kurulum Formu -->
       <div class="glass-card" style="padding: 2.25rem; border-radius: 16px;">
+        <div class="mobile-setup-logo">
+          <img src="/static/img/Linklik-siyah.png" alt="Linklik Logo" class="auth-logo">
+        </div>
         <div class="auth-header" style="text-align: left; margin-bottom: 1.25rem;">
           <h2 style="font-size: 1.55rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem;">Sistem Kurulumu</h2>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">İlk Superadmin (Yönetici) hesabınızı oluşturun.</p>
@@ -251,7 +254,7 @@
           <div class="form-group" style="margin-bottom: 1.25rem;">
             <label for="password"><i class="ph-light ph-lock"></i> Yönetici Şifresi</label>
             <div class="password-wrapper">
-              <input type="password" id="password" class="form-control" placeholder="En az 6 karakter" required autocomplete="new-password" oninput="checkPasswordStrength(this.value)">
+              <input type="password" id="password" class="form-control" placeholder="En az 8 karakter" required autocomplete="new-password" oninput="checkPasswordStrength(this.value)">
               <button type="button" class="eye-btn" onclick="togglePasswordVisibility('password', this)" title="Şifreyi Göster/Gizle">
                 <i class="ph-light ph-eye"></i>
               </button>
@@ -318,8 +321,8 @@
       }
 
       let score = 0;
-      if (val.length >= 6) score += 1;
-      if (val.length >= 10) score += 1;
+      if (val.length >= 8) score += 1;
+      if (val.length >= 12) score += 1;
       if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score += 1;
       if (/[0-9]/.test(val)) score += 1;
       if (/[^A-Za-z0-9]/.test(val)) score += 1;
@@ -327,7 +330,7 @@
       if (score <= 1) {
         fill.style.width = '25%';
         fill.style.backgroundColor = '#ef4444';
-        text.innerText = 'Zayıf şifre (en az 6 karakter gerekli)';
+        text.innerText = 'Zayıf şifre (en az 8 karakter gerekli)';
         text.style.color = '#ef4444';
       } else if (score <= 3) {
         fill.style.width = '60%';
@@ -366,10 +369,10 @@
     }
 
     function updateLogo(theme) {
-      const logo = document.querySelector('.auth-logo');
-      if (logo) {
+      const logos = document.querySelectorAll('.auth-logo');
+      logos.forEach(logo => {
         logo.src = theme === 'dark' ? '/static/img/Linklik-beyaz.png' : '/static/img/Linklik-siyah.png';
-      }
+      });
     }
 
     // Kurulum yapılmış mı kontrol et
@@ -400,8 +403,8 @@
         return;
       }
 
-      if (password.length < 6) {
-        alertBox.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Şifre en az 6 karakter olmalıdır.</div>`;
+      if (password.length < 8) {
+        alertBox.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Şifre en az 8 karakter olmalıdır.</div>`;
         return;
       }
 

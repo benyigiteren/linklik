@@ -82,6 +82,7 @@ function switchTab(tabId) {
     sidebar.classList.remove('active');
     overlay.classList.remove('active');
   }
+  document.body.style.overflow = '';
 }
 
 // Tema Yönetimi
@@ -131,9 +132,75 @@ function toggleTheme() {
 function toggleSidebar() {
   const sidebar = document.getElementById('appSidebar');
   const overlay = document.getElementById('sidebarOverlay');
-  if (sidebar) {
-    sidebar.classList.toggle('active');
+  if (sidebar && overlay) {
+    const isActive = sidebar.classList.toggle('active');
     overlay.classList.toggle('active');
+    document.body.style.overflow = isActive ? 'hidden' : '';
+  }
+}
+
+function generateRandomPassword(length = 12) {
+  const chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*_-";
+  let password = "";
+  const randomValues = new Uint32Array(length);
+  window.crypto.getRandomValues(randomValues);
+  for (let i = 0; i < length; i++) {
+    password += chars[randomValues[i] % chars.length];
+  }
+  return password;
+}
+
+function generateAndSetRandomPassword(targetInputId) {
+  const input = document.getElementById(targetInputId);
+  if (!input) return;
+  const pwd = generateRandomPassword(12);
+  input.value = pwd;
+  input.type = 'text';
+  const eyeBtn = input.parentElement ? input.parentElement.querySelector('.eye-btn i') : null;
+  if (eyeBtn) {
+    eyeBtn.className = 'ph-light ph-eye-slash';
+  }
+  if (targetInputId === 'newPassword') {
+    checkPasswordStrengthGeneral(pwd, 'newPwdStrengthFill', 'newPwdStrengthText');
+  }
+  showToast("Rastgele güçlü şifre üretildi!");
+}
+
+function checkPasswordStrengthGeneral(val, fillId, textId) {
+  const fill = document.getElementById(fillId);
+  const text = document.getElementById(textId);
+  if (!fill || !text) return;
+
+  if (!val || val.length === 0) {
+    fill.style.width = '0%';
+    fill.style.backgroundColor = 'transparent';
+    text.innerText = 'Şifre gücü';
+    text.style.color = 'var(--text-muted)';
+    return;
+  }
+
+  let score = 0;
+  if (val.length >= 8) score += 1;
+  if (val.length >= 12) score += 1;
+  if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score += 1;
+  if (/[0-9]/.test(val)) score += 1;
+  if (/[^A-Za-z0-9]/.test(val)) score += 1;
+
+  if (score <= 1) {
+    fill.style.width = '25%';
+    fill.style.backgroundColor = '#ef4444';
+    text.innerText = 'Zayıf şifre (en az 8 karakter gerekli)';
+    text.style.color = '#ef4444';
+  } else if (score <= 3) {
+    fill.style.width = '60%';
+    fill.style.backgroundColor = '#eab308';
+    text.innerText = 'Orta seviye şifre';
+    text.style.color = '#eab308';
+  } else {
+    fill.style.width = '100%';
+    fill.style.backgroundColor = '#22c55e';
+    text.innerText = 'Güçlü şifre';
+    text.style.color = '#22c55e';
   }
 }
 
@@ -720,7 +787,7 @@ async function fetchUsers() {
     const tbody = document.getElementById('usersTableBody');
 
     if (!data.success) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--accent-danger);">${escapeHtml(data.error)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--accent-danger);">${escapeHtml(data.error)}</td></tr>`;
       return;
     }
 
@@ -735,19 +802,30 @@ async function fetchUsers() {
       const safeId = Number(u.id);
       const usernameHtml = escapeHtml(u.username);
       const usernameJs = escapeJsString(u.username);
+      const linkCount = Number(u.link_count || 0);
+      const formattedDate = u.created_at ? new Date(u.created_at).toLocaleDateString('tr-TR', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }) : '-';
 
       const actionCell = isSelfOrAdmin
         ? `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`
-        : `<button class="btn btn-danger btn-small" style="gap:4px;" onclick="deleteUser(${safeId}, '${usernameJs}')">
-            <i class="ph-light ph-trash"></i> Sil
-           </button>`;
+        : `<div style="display:flex; gap:6px; justify-content:flex-end;">
+            <button class="btn btn-secondary btn-small" style="gap:4px; font-size:0.75rem; padding:4px 8px; height:auto;" onclick="openAdminResetModal(${safeId}, '${usernameJs}')" title="Üye Şifresini Sıfırla">
+              <i class="ph-light ph-key"></i> Şifre
+            </button>
+            <button class="btn btn-danger btn-small" style="gap:4px; font-size:0.75rem; padding:4px 8px; height:auto;" onclick="deleteUser(${safeId}, '${usernameJs}')" title="Üyeyi Sil">
+              <i class="ph-light ph-trash"></i> Sil
+            </button>
+           </div>`;
 
       html += `
         <tr>
-          <td style="font-weight: 500;">${usernameHtml}</td>
+          <td style="font-weight: 600; color: var(--text-primary);">${usernameHtml}</td>
           <td>
             <span class="user-role-badge ${safeRole}">${escapeHtml(roleStr)}</span>
           </td>
+          <td style="font-weight: 600; color: var(--text-secondary);">${linkCount} link</td>
+          <td style="color: var(--text-secondary); font-size: 0.82rem;">${escapeHtml(formattedDate)}</td>
           <td style="text-align: right;">
             ${actionCell}
           </td>
@@ -764,10 +842,21 @@ async function handleCreateUser(e) {
   e.preventDefault();
   const alertDiv = document.getElementById('userAlert');
   const btn = document.getElementById('createUserBtn');
-  const username = document.getElementById('newUsername').value;
+  const username = document.getElementById('newUsername').value.trim();
   const password = document.getElementById('newPassword').value;
 
   alertDiv.innerHTML = '';
+
+  if (username.length < 3) {
+    alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Kullanıcı adı en az 3 karakter olmalıdır.</div>`;
+    return;
+  }
+
+  if (password.length < 8) {
+    alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Şifre en az 8 karakter olmalıdır.</div>`;
+    return;
+  }
+
   btn.disabled = true;
 
   try {
@@ -778,9 +867,17 @@ async function handleCreateUser(e) {
     });
     const data = await res.json();
     if (data.success) {
-      alertDiv.innerHTML = `<div class="alert alert-success" style="margin-bottom:1rem;">Üye başarıyla eklendi.</div>`;
+      alertDiv.innerHTML = `
+        <div class="alert alert-success" style="margin-bottom:1rem;">
+          <strong>Üye başarıyla eklendi!</strong><br>
+          <span style="font-size:0.8rem;">Kullanıcı Adı: <strong>${escapeHtml(username)}</strong></span>
+        </div>`;
       document.getElementById('newUsername').value = '';
       document.getElementById('newPassword').value = '';
+      const fill = document.getElementById('newPwdStrengthFill');
+      const text = document.getElementById('newPwdStrengthText');
+      if (fill) { fill.style.width = '0%'; fill.style.backgroundColor = 'transparent'; }
+      if (text) { text.innerText = 'Şifre gücü'; text.style.color = 'var(--text-muted)'; }
       fetchUsers();
     } else {
       alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">${escapeHtml(data.error)}</div>`;
@@ -807,6 +904,58 @@ async function deleteUser(userID, username) {
     }
   } catch (err) {
     alert("Bağlantı hatası: Kullanıcı silinemedi.");
+  }
+}
+
+function openAdminResetModal(userId, username) {
+  const modal = document.getElementById('adminResetPasswordModal');
+  if (!modal) return;
+  document.getElementById('resetTargetUserId').value = userId;
+  document.getElementById('resetTargetUsername').innerText = username;
+  document.getElementById('adminResetNewPassword').value = '';
+  document.getElementById('adminResetAlert').innerHTML = '';
+  modal.classList.add('active');
+}
+
+function closeAdminResetModal() {
+  const modal = document.getElementById('adminResetPasswordModal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function handleAdminResetPassword(e) {
+  e.preventDefault();
+  const alertDiv = document.getElementById('adminResetAlert');
+  const btn = document.getElementById('adminResetSubmitBtn');
+  const userId = document.getElementById('resetTargetUserId').value;
+  const newPassword = document.getElementById('adminResetNewPassword').value;
+
+  if (!newPassword || newPassword.length < 8) {
+    alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Yeni şifre en az 8 karakter olmalıdır.</div>`;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerText = 'Güncelleniyor...';
+  alertDiv.innerHTML = '';
+
+  try {
+    const res = await fetch(`/api/v1/admin/users/${Number(userId)}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: newPassword })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("Üye şifresi başarıyla güncellendi!");
+      closeAdminResetModal();
+    } else {
+      alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">${escapeHtml(data.error)}</div>`;
+    }
+  } catch (err) {
+    alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Bağlantı hatası oluştu.</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Şifreyi Güncelle';
   }
 }
 
@@ -993,6 +1142,14 @@ async function handleUpdateProfile(e) {
   const password = document.getElementById('profilePassword').value;
 
   alertDiv.innerHTML = '';
+
+  if (password && password.length < 8) {
+    alertDiv.innerHTML = `<div class="alert alert-danger" style="margin-bottom:1rem;">Yeni şifre en az 8 karakter olmalıdır.</div>`;
+    btn.disabled = false;
+    btn.innerText = 'Kaydet';
+    return;
+  }
+
   btn.disabled = true;
   btn.innerText = 'Kaydediliyor...';
 

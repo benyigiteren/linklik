@@ -15,6 +15,7 @@ type User struct {
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"` // "superadmin" veya "member"
 	APIKey       string    `json:"api_key"`
+	LinkCount    int64     `json:"link_count,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -100,6 +101,11 @@ type LinkUpdateRequest struct {
 type UserCreateRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+// UserResetPasswordRequest bir üyenin şifresini sıfırlamak için admin tarafından gönderilen istek gövdesidir.
+type UserResetPasswordRequest struct {
+	NewPassword string `json:"new_password"`
 }
 
 // LinkStats bir linkin detaylı analitik istatistiklerinin özetidir.

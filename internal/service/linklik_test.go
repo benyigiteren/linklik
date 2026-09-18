@@ -228,3 +228,73 @@ func TestAdvancedFeatures(t *testing.T) {
 		t.Fatal("Linkin expires_at tarihi atanmış olmalı")
 	}
 }
+
+// TestResetUserPasswordAndLinkCount admin şifre sıfırlama ve kullanıcı link sayısı listesini test eder.
+func TestResetUserPasswordAndLinkCount(t *testing.T) {
+	userService, linkService, _ := setupTestDB(t)
+	defer db.CloseDB()
+
+	// 1. Superadmin ve normal üye oluştur
+	admin, err := userService.SetupFirstUser("adminuser", "superadminpass123")
+	if err != nil {
+		t.Fatalf("Admin oluşturulamadı: %v", err)
+	}
+
+	member, err := userService.CreateUser("team_member", "initialpass123")
+	if err != nil {
+		t.Fatalf("Üye oluşturulamadı: %v", err)
+	}
+
+	// 2. Üye için bir link oluştur
+	_, err = linkService.ShortenURL("https://member-test.com", "m-link", 0, nil, "", nil, member.ID)
+	if err != nil {
+		t.Fatalf("Link oluşturulamadı: %v", err)
+	}
+
+	// 3. Kullanıcı listesini çek ve link_count değerini kontrol et
+	users, err := userService.GetAllUsers()
+	if err != nil {
+		t.Fatalf("Kullanıcılar listelenemedi: %v", err)
+	}
+
+	var foundMember *model.User
+	for _, u := range users {
+		if u.ID == member.ID {
+			foundMember = u
+			break
+		}
+	}
+	if foundMember == nil {
+		t.Fatal("Üye listede bulunamadı")
+	}
+	if foundMember.LinkCount != 1 {
+		t.Fatalf("Üyenin link_count değeri 1 olmalı, alınan: %d", foundMember.LinkCount)
+	}
+
+	// 4. Admin tarafından üyenin şifresini sıfırla
+	err = userService.ResetUserPassword(member.ID, "brand_new_secure_pass123", admin.ID)
+	if err != nil {
+		t.Fatalf("Şifre sıfırlama hatası: %v", err)
+	}
+
+	// 5. Eski şifre ile giriş başarısız olmalı
+	_, _, err = userService.Authenticate("team_member", "initialpass123")
+	if err == nil {
+		t.Fatal("Eski şifre ile giriş reddedilmeliydi")
+	}
+
+	// 6. Yeni şifre ile giriş başarılı olmalı
+	_, authenticatedUser, err := userService.Authenticate("team_member", "brand_new_secure_pass123")
+	if err != nil {
+		t.Fatalf("Yeni şifre ile giriş yapılamadı: %v", err)
+	}
+	if authenticatedUser.ID != member.ID {
+		t.Fatalf("Doğrulanan kullanıcı ID'si uyuşmuyor: %d vs %d", authenticatedUser.ID, member.ID)
+	}
+
+	// 7. Güvenlik: Admin başka bir superadmin'in şifresini sıfırlayamaz kuralını test et
+	err = userService.ResetUserPassword(admin.ID, "short", admin.ID) // en az 8 karakter kuralı
+	if err == nil {
+		t.Fatal("Kısa şifre (short) reddedilmeliydi")
+	}
+}

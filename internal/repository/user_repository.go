@@ -122,11 +122,15 @@ func (r *UserRepository) GetCount() (int64, error) {
 	return count, nil
 }
 
-// GetAll sistemdeki tüm kullanıcıları listeler (Yönetici paneli için).
+// GetAll sistemdeki tüm kullanıcıları ve oluşturdukları link sayılarını listeler (Yönetici paneli için).
 // Güvenlik: API anahtarları admin listesinde döndürülmez; her sızıntıda tüm kullanıcılar
 // taklit edilebileceği için gereksiz yüzeyi azaltır.
 func (r *UserRepository) GetAll() ([]*model.User, error) {
-	query := `SELECT id, username, role, created_at FROM users ORDER BY created_at DESC`
+	query := `SELECT u.id, u.username, u.role, u.created_at, COUNT(l.id) AS link_count
+	          FROM users u
+	          LEFT JOIN links l ON l.created_by_id = u.id
+	          GROUP BY u.id
+	          ORDER BY u.created_at DESC`
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -136,7 +140,7 @@ func (r *UserRepository) GetAll() ([]*model.User, error) {
 	var users []*model.User
 	for rows.Next() {
 		u := &model.User{}
-		err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
+		err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt, &u.LinkCount)
 		if err != nil {
 			return nil, err
 		}
@@ -163,5 +167,12 @@ func (r *UserRepository) Delete(id int64) error {
 func (r *UserRepository) Update(u *model.User) error {
 	query := `UPDATE users SET username = ?, password_hash = ? WHERE id = ?`
 	_, err := r.db.Exec(query, u.Username, u.PasswordHash, u.ID)
+	return err
+}
+
+// UpdatePassword yalnızca şifre hash'ini günceller (Admin şifre sıfırlama için).
+func (r *UserRepository) UpdatePassword(userID int64, passwordHash string) error {
+	query := `UPDATE users SET password_hash = ? WHERE id = ?`
+	_, err := r.db.Exec(query, passwordHash, userID)
 	return err
 }

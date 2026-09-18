@@ -287,3 +287,33 @@ func (s *UserService) UpdateProfile(userID int64, username, password string) (*m
 	return u, tokenString, nil
 }
 
+// ResetUserPassword bir üyenin şifresini yönetici (Superadmin) yetkisiyle sıfırlar.
+func (s *UserService) ResetUserPassword(targetUserID int64, newPassword string, requesterID int64) error {
+	if len(newPassword) < 8 {
+		return errors.New("yeni şifre en az 8 karakter olmalıdır")
+	}
+	if len(newPassword) > 72 {
+		return errors.New("şifre 72 karakterden uzun olamaz (bcrypt sınırı)")
+	}
+
+	targetUser, err := s.repo.GetByID(targetUserID)
+	if err != nil {
+		return err
+	}
+	if targetUser == nil {
+		return errors.New("kullanıcı bulunamadı")
+	}
+
+	// Başka bir Superadmin'in şifresi sadece kendi tarafından profil ayarlarından güncellenebilir
+	if targetUser.Role == model.RoleSuperadmin && targetUser.ID != requesterID {
+		return errors.New("başka bir yöneticinin (Superadmin) şifresi sıfırlanamaz")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("şifre hashlenemedi: %v", err)
+	}
+
+	return s.repo.UpdatePassword(targetUserID, string(hashedPassword))
+}
+

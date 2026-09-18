@@ -175,6 +175,7 @@ func main() {
 		// Üye Yönetimi
 		r.Post("/api/v1/admin/users", authHandler.CreateUser)
 		r.Get("/api/v1/admin/users", authHandler.GetUsers)
+		r.Post("/api/v1/admin/users/{id}/reset-password", authHandler.ResetUserPassword)
 		r.Delete("/api/v1/admin/users/{id}", authHandler.DeleteUser)
 	})
 

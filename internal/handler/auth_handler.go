@@ -262,3 +262,43 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		"user":    updatedUser,
 	})
 }
+
+// ResetUserPassword bir üyenin şifresini yönetici olarak sıfırlar (Yalnızca Superadmin).
+func (h *AuthHandler) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+	requester := middleware.GetUserFromContext(r.Context())
+	if requester == nil {
+		respondError(w, http.StatusUnauthorized, "Oturum açmanız gerekiyor")
+		return
+	}
+
+	userIDStr := chi.URLParam(r, "id")
+	if userIDStr == "" {
+		respondError(w, http.StatusBadRequest, "Eksik kullanıcı ID'si")
+		return
+	}
+
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "Geçersiz kullanıcı ID'si")
+		return
+	}
+
+	var req model.UserResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Geçersiz JSON verisi")
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		respondError(w, http.StatusBadRequest, "Yeni şifre en az 8 karakter olmalıdır")
+		return
+	}
+
+	err = h.userService.ResetUserPassword(userID, req.NewPassword, requester.ID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondSuccess(w, map[string]string{"message": "Kullanıcı şifresi başarıyla güncellendi."})
+}
