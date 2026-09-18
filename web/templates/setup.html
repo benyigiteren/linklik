@@ -388,6 +388,13 @@
       }
     }
 
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
     async function handleSetup(e) {
       e.preventDefault();
       const alertBox = document.getElementById('alertBox');
@@ -419,7 +426,7 @@
       try {
         const res = await fetch('/api/v1/setup', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify({ username, password })
         });
         
@@ -436,7 +443,7 @@
         } else {
           alertBox.innerHTML = `
             <div class="alert alert-danger" style="margin-bottom:1rem;">
-              ${data.error || 'Bilinmeyen bir hata oluştu.'}
+              ${escapeHtml(data.error) || 'Bilinmeyen bir hata oluştu.'}
             </div>
           `;
           setupBtn.disabled = false;

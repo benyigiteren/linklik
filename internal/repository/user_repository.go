@@ -71,9 +71,9 @@ func (r *UserRepository) CreateIfNone(u *model.User) (bool, error) {
 
 // GetByID ID'ye göre kullanıcıyı getirir.
 func (r *UserRepository) GetByID(id int64) (*model.User, error) {
-	query := `SELECT id, username, password_hash, role, api_key, created_at FROM users WHERE id = ?`
+	query := `SELECT id, username, password_hash, role, api_key, token_version, created_at FROM users WHERE id = ?`
 	u := &model.User{}
-	err := r.db.QueryRow(query, id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.APIKey, &u.CreatedAt)
+	err := r.db.QueryRow(query, id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.APIKey, &u.TokenVersion, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -85,9 +85,9 @@ func (r *UserRepository) GetByID(id int64) (*model.User, error) {
 
 // GetByUsername kullanıcı adına göre kullanıcıyı getirir.
 func (r *UserRepository) GetByUsername(username string) (*model.User, error) {
-	query := `SELECT id, username, password_hash, role, api_key, created_at FROM users WHERE username = ?`
+	query := `SELECT id, username, password_hash, role, api_key, token_version, created_at FROM users WHERE username = ?`
 	u := &model.User{}
-	err := r.db.QueryRow(query, username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.APIKey, &u.CreatedAt)
+	err := r.db.QueryRow(query, username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.APIKey, &u.TokenVersion, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -99,9 +99,9 @@ func (r *UserRepository) GetByUsername(username string) (*model.User, error) {
 
 // GetByAPIKey API anahtarına göre kullanıcıyı getirir.
 func (r *UserRepository) GetByAPIKey(apiKey string) (*model.User, error) {
-	query := `SELECT id, username, password_hash, role, api_key, created_at FROM users WHERE api_key = ?`
+	query := `SELECT id, username, password_hash, role, api_key, token_version, created_at FROM users WHERE api_key = ?`
 	u := &model.User{}
-	err := r.db.QueryRow(query, apiKey).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.APIKey, &u.CreatedAt)
+	err := r.db.QueryRow(query, apiKey).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.APIKey, &u.TokenVersion, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -167,6 +167,14 @@ func (r *UserRepository) Delete(id int64) error {
 func (r *UserRepository) Update(u *model.User) error {
 	query := `UPDATE users SET username = ?, password_hash = ? WHERE id = ?`
 	_, err := r.db.Exec(query, u.Username, u.PasswordHash, u.ID)
+	return err
+}
+
+// IncrementTokenVersion kullanıcının token versiyonunu artırarak mevcut oturumları geçersiz kılar.
+// Güvenlik: Şifre değişikliği veya admin şifre sıfırlama sonrasında eski JWT'lerin kullanılmasını engeller.
+func (r *UserRepository) IncrementTokenVersion(userID int64) error {
+	query := `UPDATE users SET token_version = token_version + 1 WHERE id = ?`
+	_, err := r.db.Exec(query, userID)
 	return err
 }
 

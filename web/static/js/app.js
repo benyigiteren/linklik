@@ -231,7 +231,7 @@ function showToast(message) {
 
 async function handleLogout() {
   try {
-    const res = await fetch('/api/v1/logout', { method: 'POST' });
+    const res = await fetch('/api/v1/logout', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
     if (data.success) {
       window.location.href = '/login';
@@ -292,7 +292,7 @@ async function handleRegenerateKey() {
     return;
   }
   try {
-    const res = await fetch('/api/v1/users/refresh-token', { method: 'POST' });
+    const res = await fetch('/api/v1/users/refresh-token', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
     if (data.success) {
       const newKey = data.data.api_key;
@@ -388,7 +388,7 @@ async function fetchLinks() {
     if (currentSearchQuery) params.set('search', currentSearchQuery);
     if (currentFilterStatus) params.set('status', currentFilterStatus);
 
-    const res = await fetch(`/api/v1/links?${params.toString()}`);
+    const res = await fetch(`/api/v1/links?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
     
     const tbody = document.getElementById('linksTableBody');
@@ -549,7 +549,7 @@ async function handleShorten(e) {
   try {
     const res = await fetch('/api/v1/links', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       body: JSON.stringify(payload)
     });
     
@@ -584,7 +584,8 @@ async function handleShorten(e) {
 async function toggleLinkActive(shortCode) {
   try {
     const res = await fetch(`/api/v1/links/${encodeURIComponent(shortCode)}/toggle`, {
-      method: 'PATCH'
+      method: 'PATCH',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
     });
     const data = await res.json();
     if (data.success) {
@@ -605,7 +606,8 @@ async function resetLinkStats(shortCode) {
   }
   try {
     const res = await fetch(`/api/v1/links/${encodeURIComponent(shortCode)}/reset-stats`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
     });
     const data = await res.json();
     if (data.success) {
@@ -736,7 +738,7 @@ async function handleUpdateLink(e) {
   try {
     const res = await fetch(`/api/v1/links/${encodeURIComponent(oldCode)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       body: JSON.stringify(payload)
     });
     
@@ -766,7 +768,7 @@ async function deleteLink(shortCode) {
     return;
   }
   try {
-    const res = await fetch(`/api/v1/links/${encodeURIComponent(shortCode)}`, { method: 'DELETE' });
+    const res = await fetch(`/api/v1/links/${encodeURIComponent(shortCode)}`, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
     if (data.success) {
       showToast("Link başarıyla silindi");
@@ -782,7 +784,7 @@ async function deleteLink(shortCode) {
 // Kullanıcı Yönetimi
 async function fetchUsers() {
   try {
-    const res = await fetch('/api/v1/admin/users');
+    const res = await fetch('/api/v1/admin/users', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
     const tbody = document.getElementById('usersTableBody');
 
@@ -862,7 +864,7 @@ async function handleCreateUser(e) {
   try {
     const res = await fetch('/api/v1/admin/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       body: JSON.stringify({ username, password })
     });
     const data = await res.json();
@@ -894,7 +896,7 @@ async function deleteUser(userID, username) {
     return;
   }
   try {
-    const res = await fetch(`/api/v1/admin/users/${Number(userID)}`, { method: 'DELETE' });
+    const res = await fetch(`/api/v1/admin/users/${Number(userID)}`, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
     if (data.success) {
       showToast("Kullanıcı başarıyla silindi");
@@ -941,7 +943,7 @@ async function handleAdminResetPassword(e) {
   try {
     const res = await fetch(`/api/v1/admin/users/${Number(userId)}/reset-password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       body: JSON.stringify({ new_password: newPassword })
     });
     const data = await res.json();
@@ -987,7 +989,7 @@ async function loadAnalyticsForSelected(shortCode) {
   }
 
   try {
-    const res = await fetch(`/api/v1/analytics/${encodeURIComponent(shortCode)}`);
+    const res = await fetch(`/api/v1/analytics/${encodeURIComponent(shortCode)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const data = await res.json();
 
     if (!data.success) {
@@ -1156,7 +1158,7 @@ async function handleUpdateProfile(e) {
   try {
     const res = await fetch('/api/v1/users/profile', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       body: JSON.stringify({ username, password })
     });
     

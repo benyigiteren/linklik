@@ -265,11 +265,23 @@ func (r *LinkRepository) Update(l *model.Link) error {
 	return err
 }
 
-// Delete linki siler.
+// Delete linki ve ilişkili tüm analitik kayıtlarını güvenli bir şekilde siler.
+// Güvenlik: Transaction içinde çalıştırılır; CASCADE bağımlılığına ek olarak
+// açıkça analytics temizliği yaparak orphan kayıtları önler.
 func (r *LinkRepository) Delete(id int64) error {
-	query := `DELETE FROM links WHERE id = ?`
-	_, err := r.db.Exec(query, id)
-	return err
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`DELETE FROM analytics WHERE link_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM links WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *LinkRepository) scanLinks(query string, args ...interface{}) ([]*model.Link, error) {

@@ -15,6 +15,7 @@ type User struct {
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"` // "superadmin" veya "member"
 	APIKey       string    `json:"api_key"`
+	TokenVersion int64     `json:"token_version"`
 	LinkCount    int64     `json:"link_count,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }

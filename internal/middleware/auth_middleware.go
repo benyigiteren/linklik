@@ -116,6 +116,14 @@ func SessionAuth(userService *service.UserService, isAPI bool) func(http.Handler
 			return
 		}
 
+		// Token versiyon kontrolü: şifre değişikliğinden sonra eski JWT'leri reddet
+		if tvClaim, ok := claims["token_version"].(float64); ok {
+			if int64(tvClaim) != user.TokenVersion {
+				handleUnauthorized(w, r, isAPI)
+				return
+			}
+		}
+
 		// Kullanıcıyı context'e kaydet
 		ctx := context.WithValue(r.Context(), UserContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -206,9 +214,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 			h.Set("Content-Security-Policy",
 				"default-src 'self'; "+
 					"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "+
-					"style-src 'self' 'unsafe-inline' https://unpkg.com; "+
+					"style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; "+
 					"img-src 'self' data:; "+
-					"font-src 'self' data: https://unpkg.com https://cdn.jsdelivr.net; "+
+					"font-src 'self' data: https://unpkg.com https://cdn.jsdelivr.net https://fonts.gstatic.com; "+
 					"connect-src 'self'; "+
 					"frame-ancestors 'none'; "+
 					"base-uri 'none'; "+
@@ -359,6 +367,14 @@ func AuthEither(userService *service.UserService, isAPI bool) func(http.Handler)
 			if err != nil || user == nil {
 				handleUnauthorized(w, r, isAPI)
 				return
+			}
+
+			// Token versiyon kontrolü: şifre değişikliğinden sonra eski JWT'leri reddet
+			if tvClaim, ok := claims["token_version"].(float64); ok {
+				if int64(tvClaim) != user.TokenVersion {
+					handleUnauthorized(w, r, isAPI)
+					return
+				}
 			}
 
 			ctx := context.WithValue(r.Context(), UserContextKey, user)

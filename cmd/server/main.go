@@ -87,11 +87,11 @@ func main() {
 	r.Use(middleware.MaxBodySize(1 << 20))
 
 	// Sistem Sağlık Uç Noktaları (Docker/K8s/Load Balancer için)
-	r.Get("/healthz", healthHandler.Healthz)
-	r.Get("/readyz", healthHandler.Readyz)
+	r.With(middleware.RateLimit(30, time.Minute)).Get("/healthz", healthHandler.Healthz)
+	r.With(middleware.RateLimit(30, time.Minute)).Get("/readyz", healthHandler.Readyz)
 
-	// Statik Dosyaları Gömülü Dosya Sisteminden Sun (CSS, JS)
-	r.Handle("/static/*", http.FileServer(http.FS(web.Assets)))
+	// Statik Dosyaları Gömülü Dosya Sisteminden Sun (CSS, JS) — Tarayıcı önbelleği aktif
+	r.With(middleware.StaticCacheHeaders).Handle("/static/*", http.FileServer(http.FS(web.Assets)))
 
 	// ==========================================
 	// 7. WEB ARAYÜZÜ (HTML) ROTALARI
@@ -106,10 +106,10 @@ func main() {
 	r.With(middleware.RateLimit(5, time.Minute)).Post("/api/v1/setup", authHandler.Setup)
 	r.With(middleware.RateLimit(60, time.Minute)).Get("/api/v1/setup/status", authHandler.SetupStatus)
 	r.With(middleware.RateLimit(10, time.Minute)).Post("/api/v1/login", authHandler.Login)
-	r.Post("/api/v1/logout", authHandler.Logout)
+	r.With(middleware.RateLimit(10, time.Minute)).Post("/api/v1/logout", authHandler.Logout)
 
-	// QR Kod Uç Noktası (Önbelleklenebilir ve genel/erişilebilir)
-	r.Get("/api/v1/links/{short_code}/qr", qrHandler.GenerateQR)
+	// QR Kod Uç Noktası (Önbelleklenebilir ve genel/erişilebilir — CPU-bound DoS koruması)
+	r.With(middleware.RateLimit(60, time.Minute)).Get("/api/v1/links/{short_code}/qr", qrHandler.GenerateQR)
 
 	// OpenAPI 3.0 Şeması (ChatGPT Actions, Swagger ve AI Ajanları)
 	r.Get("/openapi.json", openAPIHandler.HandleOpenAPI)
@@ -136,6 +136,7 @@ func main() {
 	// ==========================================
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthEither(userService, true))
+		r.Use(middleware.RequireXHR) // CSRF koruması: cookie oturumlarında X-Requested-With zorunlu
 		r.Use(middleware.RateLimit(100, time.Minute))
 
 		// Link İşlemleri
@@ -165,6 +166,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthEither(userService, true))
 		r.Use(middleware.RequireRole("superadmin"))
+		r.Use(middleware.RateLimit(20, time.Minute))
 
 		// Üye Yönetimi
 		r.Post("/api/v1/admin/users", authHandler.CreateUser)
@@ -182,11 +184,12 @@ func main() {
 	// 13. HTTP Sunucusunu Başlat ve Graceful Shutdown Yapılandır
 	serverAddr := ":" + config.GlobalConfig.Port
 	srv := &http.Server{
-		Addr:         serverAddr,
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              serverAddr,
+		Handler:           r,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second, // Slowloris DDoS koruması
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

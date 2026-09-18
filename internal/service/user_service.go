@@ -129,10 +129,11 @@ func (s *UserService) Authenticate(username, password string) (string, *model.Us
 
 	// JWT Token oluştur
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":  u.ID,
-		"username": u.Username,
-		"role":     u.Role,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+		"user_id":       u.ID,
+		"username":      u.Username,
+		"role":          u.Role,
+		"token_version": u.TokenVersion,
+		"exp":           time.Now().Add(24 * time.Hour).Unix(),
 	})
 
 	tokenString, err := token.SignedString(config.GlobalConfig.GetJWTSecretKey())
@@ -271,12 +272,21 @@ func (s *UserService) UpdateProfile(userID int64, username, password string) (*m
 		return nil, "", err
 	}
 
+	// Şifre değiştiyse token versiyonunu artır (mevcut oturumları geçersiz kıl)
+	if password != "" {
+		if err := s.repo.IncrementTokenVersion(u.ID); err != nil {
+			return nil, "", fmt.Errorf("token versiyonu güncellenemedi: %v", err)
+		}
+		u.TokenVersion++
+	}
+
 	// Yeni JWT token oluştur
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":  u.ID,
-		"username": u.Username,
-		"role":     u.Role,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+		"user_id":       u.ID,
+		"username":      u.Username,
+		"role":          u.Role,
+		"token_version": u.TokenVersion,
+		"exp":           time.Now().Add(24 * time.Hour).Unix(),
 	})
 
 	tokenString, err := token.SignedString(config.GlobalConfig.GetJWTSecretKey())
@@ -314,6 +324,10 @@ func (s *UserService) ResetUserPassword(targetUserID int64, newPassword string, 
 		return fmt.Errorf("şifre hashlenemedi: %v", err)
 	}
 
-	return s.repo.UpdatePassword(targetUserID, string(hashedPassword))
+	if err := s.repo.UpdatePassword(targetUserID, string(hashedPassword)); err != nil {
+		return err
+	}
+	// Şifre sıfırlandı: eski JWT'leri geçersiz kılmak için token versiyonunu artır
+	return s.repo.IncrementTokenVersion(targetUserID)
 }
 

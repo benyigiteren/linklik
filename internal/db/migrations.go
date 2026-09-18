@@ -56,6 +56,11 @@ func RunMigrations(database *sql.DB) error {
 			name:    "create_optimized_indexes",
 			run:     migrationOptimizedIndexes,
 		},
+		{
+			version: 7,
+			name:    "add_token_version_column",
+			run:     func(db *sql.DB) error { return addColumnIfNotExists(db, "users", "token_version", "INTEGER DEFAULT 0") },
+		},
 	}
 
 	for _, m := range migrations {

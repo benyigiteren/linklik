@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"linklik/internal/model"
 	"linklik/internal/repository"
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -43,6 +44,48 @@ var ReservedAliases = map[string]bool{
 // aliasRegex özel alias'lar için izin verilen karakter şablonudur.
 var aliasRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+$`)
 
+// validateURL URL'in güvenli olduğunu doğrular: dahili IP'lere yönlendirme (SSRF) ve tehlikeli
+// şemalara (javascript:, data:, file: vb.) karşı koruma sağlar.
+func validateURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return errors.New("geçersiz URL formatı")
+	}
+
+	// Yalnızca HTTP ve HTTPS şemalarına izin ver
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("desteklenmeyen URL şeması: %s (yalnızca http ve https kabul edilir)", u.Scheme)
+	}
+
+	// Hostname kontrolü
+	hostname := u.Hostname()
+	if hostname == "" {
+		return errors.New("URL'de geçerli bir alan adı bulunamadı")
+	}
+
+	// Tehlikeli hostname'leri engelle
+	lowerHost := strings.ToLower(hostname)
+	if lowerHost == "localhost" || lowerHost == "0.0.0.0" || strings.HasSuffix(lowerHost, ".local") || strings.HasSuffix(lowerHost, ".internal") {
+		return errors.New("dahili/yerel ağ adreslerine yönlendirme güvenlik nedeniyle engellenmiştir")
+	}
+
+	// IP adresi kontrolü: dahili IP aralıklarını engelle
+	ip := net.ParseIP(hostname)
+	if ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return errors.New("dahili/özel ağ IP adreslerine yönlendirme güvenlik nedeniyle engellenmiştir")
+		}
+		// Metadata endpoint'leri (AWS, GCP, Azure)
+		if ip.Equal(net.ParseIP("169.254.169.254")) || ip.Equal(net.ParseIP("100.100.100.200")) {
+			return errors.New("cloud metadata adreslerine yönlendirme güvenlik nedeniyle engellenmiştir")
+		}
+	}
+
+	return nil
+}
+
 // ShortenURL orijinal bir URL'i kısaltır ve veritabanına kaydeder.
 func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClicks int64, expiresAtStr *string, password string, isActive *bool, createdByID int64) (*model.Link, error) {
 	originalURL = strings.TrimSpace(originalURL)
@@ -57,6 +100,10 @@ func (s *LinkService) ShortenURL(originalURL string, customAlias string, maxClic
 	u, err := url.ParseRequestURI(originalURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, errors.New("geçersiz URL formatı. Lütfen geçerli bir internet adresi yazın")
+	}
+
+	if err := validateURL(originalURL); err != nil {
+		return nil, err
 	}
 
 	if len(originalURL) > 2048 {
@@ -155,17 +202,17 @@ func (s *LinkService) GetOriginalURL(shortCode string) (*model.Link, error) {
 
 	// 1. Aktiflik Kontrolü
 	if !link.IsActive {
-		return link, errors.New("LINK_INACTIVE")
+		return nil, errors.New("LINK_INACTIVE")
 	}
 
 	// 2. Son Kullanma Tarihi Kontrolü
 	if link.ExpiresAt != nil && time.Now().After(*link.ExpiresAt) {
-		return link, errors.New("LINK_EXPIRED")
+		return nil, errors.New("LINK_EXPIRED")
 	}
 
 	// 3. Şifre Kontrolü (Şifreli linkler şifre ekranına yönlendirilmeli)
 	if link.PasswordHash != "" {
-		return link, errors.New("PASSWORD_REQUIRED")
+		return nil, errors.New("PASSWORD_REQUIRED")
 	}
 
 	// 4. Tıklama Limiti Kontrolü ve Sayaç Artırımı
@@ -175,7 +222,7 @@ func (s *LinkService) GetOriginalURL(shortCode string) (*model.Link, error) {
 			return nil, err
 		}
 		if !incremented {
-			return link, errors.New("MAX_CLICKS_REACHED")
+			return nil, errors.New("MAX_CLICKS_REACHED")
 		}
 	} else {
 		_ = s.repo.IncrementClick(link.ID)
@@ -296,6 +343,10 @@ func (s *LinkService) UpdateLink(oldShortCode string, originalURL string, custom
 	u, err := url.ParseRequestURI(originalURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, errors.New("geçersiz URL formatı")
+	}
+
+	if err := validateURL(originalURL); err != nil {
+		return nil, err
 	}
 
 	if len(originalURL) > 2048 {
