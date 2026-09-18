@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"bufio"
@@ -50,7 +50,7 @@ type jsonRPCRequest struct {
 
 type jsonRPCResponse struct {
 	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id,omitempty"`
+	ID      interface{} `json:"id"`
 	Result  interface{} `json:"result,omitempty"`
 	Error   interface{} `json:"error,omitempty"`
 }
@@ -64,12 +64,18 @@ func (h *MCPHandler) extractUser(r *http.Request) (*model.User, string) {
 
 	// 2. X-API-KEY başlığı
 	apiKey := r.Header.Get("X-API-KEY")
-
-	// 3. Authorization: Bearer <key> başlığı
 	if apiKey == "" {
-		authHeader := r.Header.Get("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+		apiKey = r.Header.Get("x-api-key")
+	}
+
+	// 3. Authorization başlığı (Bearer <key> veya doğrudan <key>)
+	if apiKey == "" {
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			apiKey = strings.TrimSpace(authHeader[7:])
+		} else if authHeader != "" && !strings.Contains(authHeader, " ") {
+			// Doğrudan anahtar formatında girilmişse
+			apiKey = authHeader
 		}
 	}
 
@@ -87,7 +93,7 @@ func (h *MCPHandler) extractUser(r *http.Request) (*model.User, string) {
 		}
 	}
 
-	if apiKey != "" {
+	if apiKey != "" && h.userService != nil {
 		u, err := h.userService.GetUserByAPIKey(apiKey)
 		if err == nil && u != nil {
 			return u, apiKey
@@ -98,21 +104,85 @@ func (h *MCPHandler) extractUser(r *http.Request) (*model.User, string) {
 }
 
 // HandleUnified tek bir standart URL (/mcp) üzerinden hem SSE hem Streamable HTTP desteği sunar.
-// GET /mcp -> SSE akışını başlatır.
-// POST /mcp -> Doğrudan JSON-RPC mesajını işler.
+// GET /mcp (Accept: text/event-stream) -> SSE akışını başlatır.
+// GET /mcp (Probe/Normal) -> Anında 200 OK ile servis durumunu döner (Gemini/istemci URL doğrulaması için).
+// POST /mcp -> Doğrudan JSON-RPC mesajını işler (Streamable HTTP).
+// OPTIONS /mcp -> CORS preflight yanıtı döner.
+// HEAD /mcp -> Anında 200 OK döner.
 func (h *MCPHandler) HandleUnified(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept, *")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method == http.MethodPost {
 		h.HandleMessage(w, r)
 		return
 	}
-	h.HandleSSE(w, r)
+
+	// GET istekleri:
+	// Eğer istemci SSE istiyorsa (Accept: text/event-stream) SSE akışını başlat
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "text/event-stream") {
+		h.HandleSSE(w, r)
+		return
+	}
+
+	// Normal HTTP GET: Gemini ve diğer araçların bağlantı testi (probe) için hemen 200 OK JSON yanıtı döner.
+	user, apiKey := h.extractUser(r)
+	authStatus := "authenticated"
+	if user == nil {
+		authStatus = "unauthenticated"
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":          "ok",
+		"service":         "linklik-mcp",
+		"protocolVersion": "2024-11-05",
+		"authentication":  authStatus,
+		"hasKey":          apiKey != "",
+		"transports":      []string{"sse", "streamable-http"},
+		"endpoints": map[string]string{
+			"unified": "/mcp",
+			"sse":     "/mcp/sse",
+			"message": "/mcp/message",
+		},
+		"capabilities": map[string]interface{}{
+			"tools":     true,
+			"resources": true,
+			"prompts":   true,
+		},
+	})
 }
 
 // HandleSSE AI istemcileri (Claude Code, Cursor, Gemini, Claude Desktop vb.) için SSE akışını başlatır.
 func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY")
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept, *")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -183,9 +253,15 @@ func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
 
 // HandleMessage SSE oturumu üzerinden gelen veya doğrudan POST edilen JSON-RPC isteklerini karşılar.
 func (h *MCPHandler) HandleMessage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY")
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept, *")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -276,6 +352,7 @@ func (h *MCPHandler) ProcessRequest(ctx context.Context, data []byte, user *mode
 				"name":    "linklik",
 				"version": "1.0.0",
 			},
+			"instructions": "Linklik URL Kısaltma ve Analitik MCP Servisi. Linkleri listelemek, yeni kısa link oluşturmak, link güncellemek veya silmek ve tıklama analitiklerini görüntülemek için bu araçları kullanabilirsiniz.",
 		}
 
 	case "notifications/initialized", "initialized":

@@ -120,22 +120,16 @@ func main() {
 	// ==========================================
 	r.Route("/mcp", func(r chi.Router) {
 		r.Use(middleware.RateLimit(300, time.Minute))
-		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY")
-			w.WriteHeader(http.StatusNoContent)
-		})
-		// Tek ve evrensel MCP uç noktası: GET -> SSE akışı, POST -> JSON-RPC (Streamable HTTP)
-		r.Get("/", mcpHandler.HandleUnified)
-		r.Post("/", mcpHandler.HandleMessage)
+		// Tek ve evrensel MCP uç noktası: GET -> SSE akışı veya Probe, POST -> JSON-RPC (Streamable HTTP)
+		r.HandleFunc("/", mcpHandler.HandleUnified)
 		// Standart alt rotalar (SSE & Message)
-		r.Get("/sse", mcpHandler.HandleSSE)
-		r.Post("/message", mcpHandler.HandleMessage)
+		r.HandleFunc("/sse", mcpHandler.HandleSSE)
+		r.HandleFunc("/message", mcpHandler.HandleMessage)
 	})
-	// Kök dizin takma adları (bazı MCP istemcileri için)
-	r.Get("/sse", mcpHandler.HandleSSE)
-	r.Post("/message", mcpHandler.HandleMessage)
+	// Direkt /mcp ve kök dizin takma adları (bazı MCP istemcileri için)
+	r.HandleFunc("/mcp", mcpHandler.HandleUnified)
+	r.HandleFunc("/sse", mcpHandler.HandleSSE)
+	r.HandleFunc("/message", mcpHandler.HandleMessage)
 
 	// ==========================================
 	// 10. YETKİLİ API ROTALARI (API-Key VEYA Oturum Destekli)

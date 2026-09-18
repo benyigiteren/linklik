@@ -142,11 +142,37 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 	}
 }
 
-// CORS yalnızca yapılandırılmış izin verilen kökenlere (allowed origins) izin verir.
-// Güvenlik: Yaban * yerine, yalnızca tanınan Origin'ler geri yansıtılır; Vary: Origin ayarlanır.
+// CORS yapılandırılmış kökenlere izin verir; MCP ve OpenAPI gibi küresel protokoller için her kökene izin verir.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
+
+		// MCP ve OpenAPI uç noktaları küresel AI istemcileri (Gemini, Claude, ChatGPT vb.) için her kökenden erişilebilir olmalıdır
+		if strings.HasPrefix(r.URL.Path, "/mcp") ||
+			r.URL.Path == "/sse" ||
+			r.URL.Path == "/message" ||
+			strings.HasPrefix(r.URL.Path, "/openapi") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/openapi") {
+
+			if origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, X-Requested-With, Accept, *")
+			w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+			w.Header().Add("Vary", "Origin")
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		allowed := config.GlobalConfig.IsOriginAllowed(origin)
 		w.Header().Add("Vary", "Origin")
 		if allowed && origin != "" {
@@ -171,17 +197,24 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		h := w.Header()
 		// Content-Security-Policy: same-origin + gerekli CDN'ler; inline script/devamı için 'unsafe-inline'
 		// (chart.js CDN'den + mevcut inline bloklar). Frame-ancestors ile clickjacking de engellendi.
-		h.Set("Content-Security-Policy",
-			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "+
-				"style-src 'self' 'unsafe-inline' https://unpkg.com; "+
-				"img-src 'self' data:; "+
-				"font-src 'self' data: https://unpkg.com https://cdn.jsdelivr.net; "+
-				"connect-src 'self'; "+
-				"frame-ancestors 'none'; "+
-				"base-uri 'none'; "+
-				"form-action 'self'")
-		h.Set("X-Frame-Options", "DENY")
+		// Content-Security-Policy ve X-Frame-Options HTML sayfaları içindir; MCP ve OpenAPI gibi genel API'lerde kısıtlamayı önlemek için atlanır
+		if !strings.HasPrefix(r.URL.Path, "/mcp") &&
+			r.URL.Path != "/sse" &&
+			r.URL.Path != "/message" &&
+			!strings.HasPrefix(r.URL.Path, "/openapi") &&
+			!strings.HasPrefix(r.URL.Path, "/api/v1/openapi") {
+			h.Set("Content-Security-Policy",
+				"default-src 'self'; "+
+					"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "+
+					"style-src 'self' 'unsafe-inline' https://unpkg.com; "+
+					"img-src 'self' data:; "+
+					"font-src 'self' data: https://unpkg.com https://cdn.jsdelivr.net; "+
+					"connect-src 'self'; "+
+					"frame-ancestors 'none'; "+
+					"base-uri 'none'; "+
+					"form-action 'self'")
+			h.Set("X-Frame-Options", "DENY")
+		}
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")

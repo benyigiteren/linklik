@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -149,3 +150,77 @@ func TestMCPHandler_Notifications(t *testing.T) {
 		t.Fatalf("expected status 202 Accepted for notifications, got %d", w.Code)
 	}
 }
+
+func TestMCPHandler_UnifiedProbe(t *testing.T) {
+	h := NewMCPHandler(nil, nil, nil)
+
+	// Test GET probe without Accept: text/event-stream
+	req := httptest.NewRequest("GET", "/mcp", nil)
+	w := httptest.NewRecorder()
+	h.HandleUnified(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET probe, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "linklik-mcp") {
+		t.Fatalf("expected linklik-mcp in response, got %s", w.Body.String())
+	}
+
+	// Test OPTIONS preflight
+	optReq := httptest.NewRequest("OPTIONS", "/mcp", nil)
+	optReq.Header.Set("Origin", "https://gemini.google.com")
+	optW := httptest.NewRecorder()
+	h.HandleUnified(optW, optReq)
+
+	if optW.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content for OPTIONS, got %d", optW.Code)
+	}
+	if optW.Header().Get("Access-Control-Allow-Origin") != "https://gemini.google.com" {
+		t.Fatalf("expected CORS origin to be https://gemini.google.com, got %s", optW.Header().Get("Access-Control-Allow-Origin"))
+	}
+
+	// Test HEAD
+	headReq := httptest.NewRequest("HEAD", "/mcp", nil)
+	headW := httptest.NewRecorder()
+	h.HandleUnified(headW, headReq)
+
+	if headW.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for HEAD, got %d", headW.Code)
+	}
+}
+
+func TestMCPHandler_ExtractUser_AuthHeaders(t *testing.T) {
+	h := NewMCPHandler(nil, nil, nil)
+
+	// Case 1: Bearer prefix
+	req1 := httptest.NewRequest("GET", "/mcp", nil)
+	req1.Header.Set("Authorization", "Bearer my_secret_token_123")
+	_, key1 := h.extractUser(req1)
+	if key1 != "my_secret_token_123" {
+		t.Fatalf("expected my_secret_token_123, got %s", key1)
+	}
+
+	// Case 2: Raw token without Bearer prefix
+	req2 := httptest.NewRequest("GET", "/mcp", nil)
+	req2.Header.Set("Authorization", "my_secret_token_456")
+	_, key2 := h.extractUser(req2)
+	if key2 != "my_secret_token_456" {
+		t.Fatalf("expected my_secret_token_456, got %s", key2)
+	}
+
+	// Case 3: X-API-KEY header
+	req3 := httptest.NewRequest("GET", "/mcp", nil)
+	req3.Header.Set("X-API-KEY", "my_secret_token_789")
+	_, key3 := h.extractUser(req3)
+	if key3 != "my_secret_token_789" {
+		t.Fatalf("expected my_secret_token_789, got %s", key3)
+	}
+
+	// Case 4: Query param ?api_key=
+	req4 := httptest.NewRequest("GET", "/mcp?api_key=my_secret_token_query", nil)
+	_, key4 := h.extractUser(req4)
+	if key4 != "my_secret_token_query" {
+		t.Fatalf("expected my_secret_token_query, got %s", key4)
+	}
+}
+
