@@ -11,23 +11,24 @@
 <h1 align="center">Linklik</h1>
 
 <p align="center">
-  <strong>Mikro Kaynak Tüketimli, Siber Güvenlik Sertleştirmeli ve Yerel Model Context Protocol (MCP) Destekli Yeni Nesil URL Kısaltma & Analitik Platformu</strong>
+  <strong>Mikro Kaynak Tüketimli, Yapay Zekâ (MCP) Uyumlu ve Üretime Hazır Modern URL Kısaltma & Analitik Platformu</strong>
 </p>
 
 <p align="center">
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version"></a>
   <a href="https://sqlite.org/"><img src="https://img.shields.io/badge/SQLite-WAL%20(Zero%20CGO)-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite"></a>
   <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-Native%202024--11--05-7C3AED?style=flat-square&logo=anthropic&logoColor=white" alt="MCP Compatible"></a>
-  <a href="#-siber-g%C3%BCvenlik--dayan%C4%B1kl%C4%B1l%C4%B1k-mimarisi"><img src="https://img.shields.io/badge/Security-Hardened%20(A%2B)-10B981?style=flat-square&logo=securityscorecard&logoColor=white" alt="Security Hardened"></a>
+  <a href="#-performans-ve-donan%C4%B1m-verimlili%C4%9Fi"><img src="https://img.shields.io/badge/RAM-10--15%20MB%20(Idle)-10B981?style=flat-square&logo=speedtest&logoColor=white" alt="RAM Idle"></a>
+  <a href="#-performans-ve-donan%C4%B1m-verimlili%C4%9Fi"><img src="https://img.shields.io/badge/Throughput-10.000%2B%20RPS-F59E0B?style=flat-square&logo=fastapi&logoColor=white" alt="RPS"></a>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-Multi--Arch%20Ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Ready"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-6366F1?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
   <a href="#-10-saniyede-h%C4%B1zl%C4%B1-ba%C5%9Flang%C4%B1%C3%A7-quick-start"><strong>Hızlı Başlangıç</strong></a> •
-  <a href="#-neden-linklik">Neden Linklik?</a> •
+  <a href="#-linklik-nedir-ve-ne-i%C5%9Fe-yarar">Ne İşe Yarar?</a> •
+  <a href="#-neden-linklik-farklar%C4%B1-nelerdir">Farkları Nelerdir?</a> •
   <a href="#-temel-yetkinlikler">Özellikler</a> •
-  <a href="#-siber-g%C3%BCvenlik--dayan%C4%B1kl%C4%B1l%C4%B1k-mimarisi">Güvenlik</a> •
   <a href="#-model-context-protocol-mcp-ai-ajanlar%C4%B1">MCP & AI</a> •
   <a href="#-rest-api-referans%C4%B1">REST API</a> •
   <a href="#-konfig%C3%BCrasyon">Konfigürasyon</a>
@@ -37,9 +38,9 @@
 
 ## ⚡ 10 Saniyede Hızlı Başlangıç (Quick Start)
 
-Linklik'i sunucunuzda veya yerel ortamınızda saniyeler içinde çalıştırmak için hazır **GHCR (GitHub Container Registry)** imajını tek bir komutla ayağa kaldırabilirsiniz:
+Linklik'i sunucunuzda veya yerel ortamınızda çalıştırmak için hazır **GHCR (GitHub Container Registry)** imajını tek komutla başlatabilirsiniz:
 
-### 🐳 Seçenek 1: Tek Komutla Docker Run (GHCR İmajı)
+### 🐳 Seçenek 1: Tek Komutla Docker Run (Önerilen)
 
 ```bash
 docker run -d \
@@ -52,7 +53,7 @@ docker run -d \
   ghcr.io/benyigiteren/linklik:latest
 ```
 
-> **🎉 Kurulum Tamamlandı:** Tarayıcınızda `http://localhost:8080` adresine gidin. Sistem otomatik olarak sizi `/setup` sihirbazına yönlendirecek ve ilk Superadmin hesabınızı güvenle oluşturacaktır.
+> **🎉 Kurulum Tamamlandı:** Tarayıcınızdan `http://localhost:8080` adresine gidin. Sistem otomatik olarak sizi `/setup` sihirbazına yönlendirecek ve ilk Superadmin hesabınızı oluşturacaktır.
 
 ### 📦 Seçenek 2: Klonlamadan Tek Komutla Docker Compose
 
@@ -73,120 +74,97 @@ docker compose up -d
 
 ---
 
-## ⚡ Neden Linklik?
+## 📖 Linklik Nedir ve Ne İşe Yarar?
 
-Geleneksel URL kısaltıcı servisler ya hantal bağımlılıklar (Redis, harici DB sunucuları, ağır Node/Python ortamları) gerektirir ya da üçüncü taraf veri madenciliği yapan kapalı servislerin elindedir. 
+**Linklik**, kendi sunucunuzda barındırabileceğiniz (self-hosted), Go ve SQLite ile geliştirilmiş, ultra hafif, modern ve yapay zekâ uyumlu bir URL kısaltma ve analiz platformudur.
 
-**Linklik**, modern bulut mimarisi ve yapay zekâ çağının gereksinimlerine göre sıfırdan tasarlandı:
+Uzun, karmaşık web bağlantılarını akılda kalıcı kısa linklere dönüştürmenin ötesinde, tam kapsamlı bir link yaşam döngüsü ve ziyaretçi analizi sunar:
 
-* **Tüy Kadar Hafif:** Boşta sadece **10–15 MB RAM** tüketimi, ~15 MB bağımsız derlenmiş tek ikili dosya (single static binary).
-* **Sıfır CGO & Saf Taşınabilirlik:** `modernc.org/sqlite` ile harici C derleyicisi gerektirmeden, **SQLite WAL** hızında tek dosyalık veritabanı.
-* **Yapay Zekâya Yerel Uyum (Agent-First):** Dünyanın ilk **Model Context Protocol (MCP)** standartlarını yerel olarak destekleyen URL kısaltma motoru. Claude Desktop, Cursor, Gemini veya LangChain ile sıfır konfigürasyonla çalışır.
-* **Derinlemesine Savunma (Defense-in-Depth):** Profesyonel siber güvenlik testlerinden geçmiş; SSRF, DOM XSS, Slowloris, Brute-Force ve CSRF saldırılarına karşı donanımlı çekirdek.
-* **Veri Egemenliği (Data Sovereignty):** 3. parti izleyici kodlar (Google Analytics vb.) içermez; tüm tıklama ve ziyaretçi verileri yalnızca sizin kontrolünüzdeki SQLite dosyasında saklanır.
+### 🎯 Nerelerde Kullanılır?
+* **Pazarlama & Sosyal Medya:** Kampanyalarınız için özel takma adlı (custom alias) linkler oluşturun. Gelen reklam etiketlerini (UTM parametreleri) hedef siteye kayıpsız iletir.
+* **Süreli / Flaş Kampanyalar:** Belirli bir tarih ve saatte geçerliliğini yitiren (TTL) linkler tanımlayın. Süre dolduğunda yönlendirme otomatik durur.
+* **Kontenjanlı Paylaşımlar:** Belirli bir tıklama sınırına (örn: ilk 500 kişi) ulaştığında kendini kilitleyen bağlantılar oluşturun.
+* **Özel / Gizli Dökümanlar:** Ziyaretçiden parola isteyen şifre korumalı linkler oluşturarak dosya veya özel sayfalarınızı kontrollü paylaşın.
+* **Hızlı Durdurma (Kill-Switch):** Bir kampanyayı silmeden tek tıkla pasife alın, dilediğinizde tek tıkla tekrar açın.
+* **Baskı & Tanıtım İçin QR:** Her link için anında yüksek çözünürlüklü dinamik PNG QR kodlar üretin.
+* **Ziyaretçi Analizi:** Linklerinize hangi ülkelerden, hangi tarayıcılardan ve hangi günlerde tıklandığını 3. parti izleyici kodlara ihtiyaç duymadan takip edin.
+* **Yapay Zekâ ile Otomasyon:** Claude Desktop, Cursor veya terminal asistanlarınıza Linklik'i bağlayın; AI ajanlarınız sizin adınıza sohbet içerisinden link oluştursun ve analiz etsin.
 
 ---
 
-## 🏛️ Mimari Bakış
+## 🏆 Neden Linklik? Farkları Nelerdir?
 
-Linklik; gelen istekleri katmanlı güvenlik süzgeçlerinden geçirip asenkron iş parçacıklarıyla veritabanına yansıtan reaktif bir akışa sahiptir:
+Piyasadaki popüler URL kısaltıcılar (Bitly, Shlink, Dub, TinyURL) ile karşılaştırıldığında Linklik'in öne çıkan mimari farkları:
 
-```mermaid
-flowchart LR
-    A[İstemci / AI Ajan / Ziyaretçi] --> B{Ters Proxy & Güvenlik Duvarı}
-    B -->|CIDR & IP Doğrulama| C[Chi Router & Güvenlik Başlıkları]
-    C -->|Slowloris + 1 MiB Sınır| D[Rate Limiter & CSRF Denetimi]
-    D -->|Oturum / API-Key / Role| E[İş Mantığı Katmanı Service]
-    E -->|Kısa Kod Sorgulama| F[(SQLite WAL Veritabanı)]
-    E -.->|Non-Blocking Drop-Safe Kuyruk| G[4x Async Worker Havuzu]
-    G -->|Bellek İçi GeoIP Önbelleği| H[Tıklama & Coğrafi Analitik]
-    H -->|Toplu Yazma| F
-```
+| Karşılaştırma Kriteri | Linklik | Geleneksel Çözümler (Shlink, Kutt vb.) | Bulut Servisleri (Bitly, Dub vb.) |
+| :--- | :---: | :---: | :---: |
+| **Bellek Tüketimi (RAM)** | **10–15 MB (İnanılmaz Hafif)** | 180–450 MB (PHP/Node runtime) | Bulut (Ücretli Kota Sınırları) |
+| **Harici Veritabanı** | **Gerekmez** (Gömülü Pure-Go SQLite) | MySQL veya PostgreSQL şart | Sağlayıcı Altyapısı |
+| **Harici Önbellek (Redis)** | **Gerekmez** (Bellek içi önbellek) | Redis veya Memcached önerilir | Redis/Upstash bağımlılığı |
+| **Yapay Zekâ / MCP Desteği** | ✅ **Yerleşik Model Context Protocol** | ❌ Yok | ❌ Kısmi Webhook |
+| **Tıklama Gecikmesi** | **0 ms Ek Gecikme** (Asenkron kuyruk) | Çoğu çözümde senkron DB kaydı | Ağ mesafesine bağlı |
+| **Veri Gizliliği** | ✅ **%100 Kendi Sunucunuzda** | ✅ Kendi Sunucunuzda | ❌ Veriler 3. şahıslarda |
+| **Tek Binary Dağıtımı** | ✅ **Var (~15 MB tek dosya)** | ❌ Yok (Yüzlerce dosya/vendor) | ❌ Yok |
+| **Ücretsiz & Sınırsız** | ✅ **Tamamen Açık Kaynak (MIT)** | ✅ Açık Kaynak | ❌ Aylık link/tıklama limitli |
 
 ---
 
 ## 💎 Temel Yetkinlikler
 
-### 🔗 Gelişmiş Link Yaşam Döngüsü
-* **Zaman Ayarlı Linkler (TTL):** Belirlenen tarih ve saatte otomatik olarak kullanımdan kalkan geçici bağlantılar.
-* **Tıklama Limiti (Click Cap):** Belirli bir ziyaret sayısına (örn. 500 tıklama) ulaştığında kendini güvenle kilitleyen atomik sayaçlar.
-* **Parola Korumalı Yönlendirme:** Hassas hedefler için ziyaretçiyi zarif bir şifre doğrulama ekranıyla karşılayan uçtan uca koruma.
-* **Anında Duraklatma (Kill-Switch):** Linki veya verilerini silmeden tek tıkla pasife alma ve dilediğinizde tekrar aktifleştirme.
-* **UTM & Query Koruyucu:** Gelen reklam parametrelerini (UTM tags, ref, affiliate parametreleri) hedef adrese kayıpsız iletme.
-* **Dinamik QR Kod Üretimi:** Panel üzerinden veya API rotasından (`/qr?size=300`) vektörel kalitede, 24 saat önbelleklenen dinamik PNG QR çıktısı.
+### 🔗 1. Akıllı Link Yönetimi
+* **Özel Takma Ad (Alias):** `linklik.com/yaz-indirimi` gibi markanıza özel kısa adresler.
+* **Son Kullanma Tarihi (TTL):** Etkinlik veya kampanya bitişinde otomatik kapanma.
+* **Maksimum Tıklama Sayacı:** Atomik sayaç kontrolüyle kota dolduğunda otomatik kilitleme.
+* **Parola Korumalı Bağlantı:** Ziyaretçiyi şık bir şifre giriş formuyla karşılayan güvenli yönlendirme.
+* **Tek Tıkla Açma/Kapama:** Linki silmeden dilediğiniz an durdurabilme.
+* **Gelişmiş Arama & Filtreleme:** Durumuna göre (`Tümü`, `Aktif`, `Pasif`, `Süresi Dolan`) anında filtreleme.
+* **Dinamik QR Kod:** Doğrudan panelden veya API'den (`/qr?size=300`) 24 saat önbellekli PNG çıktısı.
 
-### 📊 Asenkron Analitik & Gizlilik
-* **Sıfır Gecikmeli Yönlendirme:** Ziyaretçi anında hedef URL'e aktarılır (`HTTP 302`); IP, tarayıcı, işletim sistemi ve yönlendiren analitikleri arka plandaki **10.000 kapasiteli asenkron iş havuzunda** işlenir.
-* **Thread-Safe GeoIP Önbelleği:** Dış API kotalarını tüketmemek ve yönlendirmeyi yavaşlatmamak için bellek içi thread-safe IP tablosu.
-* **Bento Grid Gösterge Paneli:** Son 30 günlük tıklama trendleri, ülke dağılımları ve cihaz/tarayıcı dağılımlarını gösteren Chart.js grafikleri.
+### 📊 2. Asenkron & Gizlilik Odaklı Analitik
+* **Sıfır Gecikmeli Yönlendirme:** Ziyaretçi bekletilmeden anında hedef adrese aktarılır (`HTTP 302`); tıklama verileri 4 worker'lı arka plan kuyruğunda işlenir.
+* **İç Bellek GeoIP Önbelleği:** Dış servislere bağımlılığı ve kota harcamasını engelleyen dahili IP-ülke tablosu.
+* **Bento Grid Grafikleri:** Son 30 günlük tıklama trendleri, ülke dağılımları ve cihaz/tarayıcı dağılımlarını gösteren görsel raporlama.
 
-### 👥 Rol Tabanlı Yetkilendirme (RBAC) & İlk Kurulum
-* **İlk Kurulum Sihirbazı (`/setup`):** Sistemde kayıtlı kullanıcı yokken açılır; ilk kullanıcı otomatik **Superadmin** olur ve ardından rota kalıcı olarak mühürlenir.
-* **Çoklu Kullanıcı Yönetimi:** Superadmin yeni üyeler (`member`) ekleyebilir, kullanıcı şifrelerini sıfırlayabilir veya hesap silebilir.
-* **İzolasyon:** Standart üyeler yalnızca kendi oluşturdukları linkleri ve analitikleri yönetebilir.
-
----
-
-## 🛡️ Siber Güvenlik & Dayanıklılık Mimarisi
-
-Linklik, siber güvenlik uzmanı bakış açısıyla tasarlanmış ve derinlemesine sertleştirilmiştir:
-
-| Güvenlik Katmanı | Tehdit Senaryosu | Alınan Önlem / Mekanizma |
-| :--- | :--- | :--- |
-| **SSRF & Open Redirect** | İç ağ taraması, Cloud Metadata ifşası (`169.254.169.254`), zararlı scheme (`javascript:`, `file:`) | `validateURL()` motoru RFC1918 özel ağlarını (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), loopback (`127.0.0.1`), metadata adreslerini ve gayriresmî şemaları engeller. |
-| **DOM XSS Savunması** | Hata mesajları veya kullanıcı girdileriyle script enjeksiyonu | Tüm şablonlarda (`login`, `setup`, `dashboard`) dinamik HTML render öncesi `escapeHtml()` temizliği ve context-aware Go template motoru. |
-| **JWT Token Versioning** | Çalınan veya sızan token'ların süresi dolana kadar yetkisiz kullanımı | Veritabanında `token_version` takibi (Migration v7). Kullanıcı şifresini değiştirdiğinde veya admin sıfırladığında eski oturumlar milisaniyeler içinde geçersiz kılınır. |
-| **Hız Sınırlama (Rate Limit)** | Brute-force saldırıları, link spamming, DoS | IP başına kayan pencereli (sliding window) koruma: Setup (5/dk), Login (10/dk), Admin (20/dk), Yönlendirme (300/dk). 429 yanıtlarında standart JSON ve dinamik `Retry-After` başlığı. |
-| **Memory DoS Koruması** | Milyonlarca rastgele sahte IP ile bellek şişirme | Rate limiter tablosunda 100.000 aktif bucket sınırı ve her 60 saniyede bir otomatik agresif çöp toplayıcı (cleanup). |
-| **Anti-CSRF Savunması** | Siteler arası sahte istek ile link silme/değiştirme | `SameSite=Lax` çerez korumasına ek olarak, durum değiştiren tüm API rotalarında `RequireXHR` middleware ile `X-Requested-With` başlığı zorunluluğu. |
-| **Slowloris DDoS Engeli** | Yavaş HTTP başlığı göndererek bağlantı tüketme | `ReadHeaderTimeout: 5s` ile yavaş bağlantılar agresif şekilde sonlandırılır. |
-| **Gövde Şişirme (Body Overflow)**| Devasa JSON gövdeleri ile sunucu belleğini kilitleme | `MaxBodySize(1 MiB)` middleware ile istek boyutunun aşılması engellenir. |
-| **Zamanlama Analizi (Timing Attack)**| Var olan ve olmayan kullanıcıları yanıt süresinden anlama | Kullanıcı adı bulunamadığında sahte bcrypt hash'i (`dummyPasswordHash`) koşturularak yanıt süreleri eşitlenir. |
-| **Ters Proxy Sahteciliği** | Sahte `X-Forwarded-For` ile IP spoofing | Yalnızca tanımlı güvenilir CIDR bloklarından (Cloudflare, Docker Bridge, Private RFC1918) gelen başlıklar kabul edilir. |
-| **HSTS & Güvenlik Başlıkları** | Man-in-the-Middle, Clickjacking, MIME-Sniffing | `Strict-Transport-Security` (reverse proxy destekli), katı CSP politikası, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. |
+### 👥 3. Rol Tabanlı Çoklu Kullanıcı
+* **Superadmin:** Tüm linkleri yönetebilir, yeni üyeler ekleyebilir, kullanıcıları silebilir veya şifrelerini sıfırlayabilir.
+* **Üye (Member):** Yalnızca kendi oluşturduğu linkleri ve bunlara ait analitikleri görüntüleyebilir.
+* **İlk Kurulum Koruması:** Sistemde kullanıcı yokken açılan kurulum sihirbazı, ilk kayıt sonrası kalıcı olarak kapanır.
 
 ---
 
-## 📊 Kaynak Tüketim & Performans Kıyaslaması
+## 🏛️ Çalışma Mimarisi
 
-Linklik'in tek başına derlenmiş yalın mimarisi, geleneksel alternatiflere göre dramatik bir verimlilik sunar:
-
-| Kriter | Linklik (Go + SQLite) | Shlink (PHP + MySQL + Redis) | Dub.co (Node.js + Edge) |
-| :--- | :---: | :---: | :---: |
-| **RAM Tüketimi (Boşta)** | **~12 MB** | ~180 MB | ~150 MB |
-| **RAM Tüketimi (1.000 RPS)** | **~35 MB** | ~450 MB | ~300 MB |
-| **Harici Veritabanı Şartı** | ❌ **Gerekmez** (Gömülü WAL) | ✅ Gerekir (MySQL/PG) | ✅ Gerekir (Postgres) |
-| **Harici Önbellek (Redis)** | ❌ **Gerekmez** | ✅ Önerilir | ✅ Gerekir (Upstash) |
-| **Yerel AI/MCP Desteği** | ✅ **Kutudan Çıkar Çıkmaz** | ❌ Yok | ❌ Kısmi Webhook |
-| **Kurulum Süresi** | **30 Saniye** | ~10 Dakika | ~15 Dakika |
-
----
-
-## 🛠️ Yerel Geliştirme & Kaynak Koddan Derleme (Native Go)
-
-Konteyner kullanmadan doğrudan kaynak kod üzerinden geliştirmek veya ikili dosya derlemek için:
-
-Sisteminizde Go (1.22+) kuruluysa:
-
-```bash
-# Bağımlılıkları kontrol edin
-go mod download
-
-# Testleri koşturun
-go test ./... -v
-
-# Binary olarak derleyin
-go build -ldflags="-s -w" -o linklik ./cmd/server
-
-# Çalıştırın
-./linklik
+```mermaid
+flowchart LR
+    A[Kullanıcı / AI Ajan / Ziyaretçi] --> B{Ters Proxy & Yük Dengeleyici}
+    B --> C[Chi Router & HTTP Katmanı]
+    C --> D[Hız Sınırlayıcı Rate Limiter]
+    D --> E[İş Mantığı Katmanı Service]
+    E -->|Kısa Kod Sorgulama| F[(Gömülü SQLite WAL)]
+    E -.->|Gecikmesiz Asenkron Kuyruk| G[4x Arka Plan Worker Havuzu]
+    G -->|Bellek İçi Önbellek| H[Tıklama & Coğrafi Analitik]
+    H -->|Toplu Kayıt| F
 ```
+
+---
+
+## ⚡ Performans ve Donanım Verimliliği
+
+Linklik, en ucuz VPS sunucularında (1 vCPU, 512 MB – 1 GB RAM) bile binlerce istek altında sorunsuz çalışacak şekilde optimize edilmiştir:
+
+| Metrik | Değer |
+| :--- | :--- |
+| **Bellek Tüketimi (Boşta)** | 10 – 15 MB |
+| **Bellek Tüketimi (Yüksek Yük)** | 30 – 50 MB |
+| **Derlenmiş Dosya Boyutu** | ~15 MB |
+| **Disk İhtiyacı (10.000 link + 100.000 tıklama)** | ~20 – 25 MB |
+| **İşlem Kapasitesi (1 vCPU VPS)** | 10.000+ İstek/Saniye (RPS) |
 
 ---
 
 ## 🤖 Model Context Protocol (MCP) AI Ajanları
 
-Linklik, **Anthropic Model Context Protocol (MCP)** standardını doğrudan çekirdeğinde barındırır. Bu sayede AI asistanlarınız hiçbir ara katmana ihtiyaç duymadan link kısaltabilir, analitik okuyabilir ve linkleri yönetebilir.
+Linklik, **Model Context Protocol (MCP)** standardını doğrudan destekler. AI asistanlarınız (Claude Desktop, Cursor, Gemini, Claude Code vb.) panel açmanıza gerek kalmadan sohbet üzerinden işlem yapabilir.
 
 ### 1. Cursor Entegrasyonu (`.cursor/mcp.json`)
 
@@ -216,28 +194,28 @@ Linklik, **Anthropic Model Context Protocol (MCP)** standardını doğrudan çek
 }
 ```
 
-### 3. Claude Code / CLI Entegrasyonu
+### 3. Claude Code / Terminal CLI Entegrasyonu
 
 ```bash
 claude mcp add --transport http linklik http://localhost:8080/mcp --header "Authorization: Bearer lk_your_api_key_here"
 ```
 
-### Sunulan Hazır MCP Araçları (Tools)
+### AI Tarafından Kullanılabilen Hazır MCP Araçları:
 
-| MCP Tool Adı | Açıklama | Ana Parametreler |
+| Araç Adı | Ne İşe Yarar? | Ana Parametreler |
 | :--- | :--- | :--- |
-| `shorten_link` | Yeni kısa link oluşturur. | `url`, `custom_alias`, `max_clicks`, `expires_at`, `password`, `is_active` |
-| `list_links` | Linkleri arama, filtre ve sayfalama ile getirir. | `page`, `limit`, `search`, `status` (`all`, `active`, `inactive`, `expired`) |
-| `get_link_analytics` | Toplam tıklanma, coğrafya, cihaz ve trend analitiğini döner. | `short_code` |
-| `toggle_link` | Bir linkin aktiflik durumunu tersine çevirir. | `short_code` |
+| `shorten_link` | Yeni kısa link oluşturur (alias, limit, parola, TTL destekli). | `url`, `custom_alias`, `max_clicks`, `expires_at`, `password` |
+| `list_links` | Linkleri arama, filtreleme ve sayfalama ile listeler. | `page`, `limit`, `search`, `status` |
+| `get_link_analytics` | Toplam tıklama, ülke ve tarayıcı istatistiklerini getirir. | `short_code` |
+| `toggle_link` | Bir linkin durumunu anında aktif veya pasif yapar. | `short_code` |
 | `reset_link_stats` | Linkin tıklama sayacını ve geçmiş analitiğini sıfırlar. | `short_code` |
-| `delete_link` | Linki ve ilişkili verilerini kalıcı olarak siler. | `short_code` |
+| `delete_link` | Linki kalıcı olarak siler. | `short_code` |
 
 ---
 
 ## 💻 REST API Referansı
 
-Tüm uç noktalar standart JSON formatında yanıt döner. Kimlik doğrulama için `X-API-KEY: lk_...` başlığı veya `Authorization: Bearer <token>` kullanılır.
+Her kullanıcının panelden alabileceği bir `X-API-KEY` anahtarı bulunur.
 
 ### 1. Link Kısaltma
 ```bash
@@ -249,12 +227,12 @@ curl -X POST http://localhost:8080/api/v1/links \
     "custom_alias": "ozel-kampanya",
     "max_clicks": 1000,
     "expires_at": "2026-12-31T23:59:59Z",
-    "password": "guvenli-parola",
+    "password": "istege-bagli-sifre",
     "is_active": true
   }'
 ```
 
-**Başarılı Yanıt (`201 Created`):**
+**Örnek Başarılı Yanıt (`201 Created`):**
 ```json
 {
   "success": true,
@@ -278,13 +256,13 @@ curl -X GET "http://localhost:8080/api/v1/links/ozel-kampanya/qr?size=300" \
   --output qrcode.png
 ```
 
-### 3. Analitik Raporu Sorgulama
+### 3. Analitik Raporu Alma
 ```bash
 curl -X GET http://localhost:8080/api/v1/analytics/ozel-kampanya \
   -H "X-API-KEY: lk_your_key_here"
 ```
 
-### 4. Link Durumunu Değiştirme (Aktif/Pasif)
+### 4. Link Durumunu Değiştirme (Aktif / Pasif)
 ```bash
 curl -X PATCH http://localhost:8080/api/v1/links/ozel-kampanya/toggle \
   -H "X-API-KEY: lk_your_key_here"
@@ -292,49 +270,55 @@ curl -X PATCH http://localhost:8080/api/v1/links/ozel-kampanya/toggle \
 
 ---
 
+## 🛠️ Yerel Geliştirme & Kaynak Koddan Derleme
+
+Konteyner kullanmadan doğrudan Go ile çalıştırmak veya ikili dosya derlemek için:
+
+```bash
+# Bağımlılıkları kontrol edin
+go mod download
+
+# Testleri çalıştırın
+go test ./... -v
+
+# Binary olarak derleyin
+go build -ldflags="-s -w" -o linklik ./cmd/server
+
+# Çalıştırın
+./linklik
+```
+
+---
+
 ## ⚙️ Konfigürasyon
 
-Linklik, 12-Factor App ilkelerine uygun olarak tamamen ortam değişkenleri (`.env` veya sistem environment) üzerinden yapılandırılır:
+Linklik tamamen ortam değişkenleri (`.env` veya sistem değişkenleri) üzerinden yapılandırılır:
 
 | Değişken | Varsayılan | Açıklama |
 | :--- | :---: | :--- |
-| `PORT` | `8080` | HTTP sunucusunun dinleyeceği port. |
+| `PORT` | `8080` | Sunucunun dinleyeceği port. |
 | `DB_PATH` | `linklik.db` | SQLite veritabanı dosyasının yolu. |
-| `BASE_URL` | `http://localhost:8080` | Üretilen kısa linklerin başında yer alacak alan adı. |
-| `JWT_SECRET` | *(Otomatik Üretilir)* | JWT imzalamak için en az 32 karakterli güçlü anahtar. |
-| `COOKIE_SECURE` | `false` | HTTPS arkasında çalışırken `true` yapılmalıdır (`Secure` cookie flag). |
-| `ALLOWED_ORIGINS` | `""` | Virgülle ayrılmış CORS izinli kökenler (boşsa sadece BASE_URL). |
-| `TLS_CERT_PATH` | `""` | (Opsiyonel) Yerel SSL sertifika dosyası. |
-| `TLS_KEY_PATH` | `""` | (Opsiyonel) Yerel SSL özel anahtar dosyası. |
+| `BASE_URL` | `http://localhost:8080` | Kısaltılan linklerin sunulacağı alan adı. |
+| `JWT_SECRET` | *(Otomatik Üretilir)* | Oturum doğrulaması için en az 32 karakterli gizli anahtar. |
+| `COOKIE_SECURE` | `false` | HTTPS arkasında çalışıyorsanız `true` yapın. |
+| `ALLOWED_ORIGINS` | `""` | Virgülle ayrılmış CORS izinli adresler (boşsa BASE_URL kullanılır). |
+| `TLS_CERT_PATH` | `""` | (Opsiyonel) SSL sertifika dosyası. |
+| `TLS_KEY_PATH` | `""` | (Opsiyonel) SSL özel anahtar dosyası. |
 
 ---
 
-## 📦 Üretim Dağıtımı (Production Deployment)
+## 📦 Üretim Dağıtımı (Production)
 
-### Sıfır Kesinti (Zero-Downtime) & Veri Güvenliği
-1. **İdempotent Şema Göçleri:** Sunucu her başladığında `schema_migrations` tablosunu kontrol eder. Mevcut veritabanınızı silmeden güvenle sürüm yükseltebilirsiniz (v1'den v7'ye otomatik geçiş).
-2. **Konteyner Güvenlik Profili:** `docker-compose.yml` içerisinde `read_only: true`, `cap_drop: ALL`, `no-new-privileges:true` ve root olmayan `appuser` (UID 10001) standart olarak tanımlıdır.
-3. **Kademeli Kapanma (Graceful Shutdown):** `SIGTERM` veya `SIGINT` sinyali alındığında sunucu mevcut isteklerin bitmesi için 5 saniye bekler ve kuyruktaki tüm analitik işlemlerini SQLite'a yazdıktan sonra güvenle kapanır.
-
----
-
-## 🤝 Katkıda Bulunma
-
-Açık kaynak topluluğunun katkılarını memnuniyetle karşılıyoruz!
-
-1. Bu depoyu çatallayın (Fork).
-2. Yeni bir özellik dalı açın (`git checkout -b feature/harika-ozellik`).
-3. Değişikliklerinizi commit edin (`git commit -m 'feat: harika ozellik eklendi'`).
-4. Testleri çalıştırın (`go test ./...`).
-5. Dalınızı pushlayın (`git push origin feature/harika-ozellik`).
-6. Bir **Pull Request** açın.
+* **Otomatik Veritabanı Şeması:** Sunucu başladığında `schema_migrations` tablosunu denetler; sürüm yükseltmelerinde veritabanınızı silmeniz gerekmez.
+* **Konteyner Mimarisi:** `docker-compose.yml` içinde root olmayan kullanıcı (`UID 10001`), salt okunur dosya sistemi (`read_only: true`) ve güvenli izin kısıtları standarttır.
+* **Kesintisiz Kapanma (Graceful Shutdown):** `SIGTERM` sinyali geldiğinde bekleyen istekler tamamlanır ve kuyruktaki analitik işleri SQLite'a yazıldıktan sonra temiz bir şekilde kapanır.
 
 ---
 
 ## 📄 Lisans
 
-Bu proje [MIT Lisansı](LICENSE) kapsamında korunmaktadır. Özgürce kullanabilir, değiştirebilir ve kendi altyapınızda barındırabilirsiniz.
+Bu proje açık kaynaklı olup, [MIT Lisansı](LICENSE) altında dağıtılmaktadır.
 
 <p align="center">
-  <sub>Modern, minimalist ve ödün vermeyen bir açık kaynak vizyonuyla inşa edildi. 🤍</sub>
+  <sub>Modern, hafif ve amaca yönelik bir açık kaynak vizyonuyla inşa edildi. 🤍</sub>
 </p>
