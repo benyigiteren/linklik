@@ -175,8 +175,8 @@ func TestMCPHandler_UnifiedProbe(t *testing.T) {
 	if optW.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content for OPTIONS, got %d", optW.Code)
 	}
-	if optW.Header().Get("Access-Control-Allow-Origin") != "https://gemini.google.com" {
-		t.Fatalf("expected CORS origin to be https://gemini.google.com, got %s", optW.Header().Get("Access-Control-Allow-Origin"))
+	if optW.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("expected CORS origin to be *, got %s", optW.Header().Get("Access-Control-Allow-Origin"))
 	}
 
 	// Test HEAD

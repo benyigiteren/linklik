@@ -227,8 +227,13 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 		h.Set("X-XSS-Protection", "0") // modern tarayıcılar CSP'ye öncelik vermeli
-		// HSTS yalnızca HTTPS üzerinden gelen yanıtlarda
-		if r.TLS != nil {
+		// HSTS: HTTPS üzerinden gelen yanıtlarda (doğrudan TLS veya reverse proxy arkası)
+		// Güvenlik: r.TLS reverse proxy arkasında nil olur; X-Forwarded-Proto veya
+		// COOKIE_SECURE=true ayarı varsa HSTS başlığı eklenir.
+		isHTTPS := r.TLS != nil ||
+			strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") ||
+			(config.GlobalConfig != nil && config.GlobalConfig.CookieSecure)
+		if isHTTPS {
 			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}
 		next.ServeHTTP(w, r)

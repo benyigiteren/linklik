@@ -112,7 +112,8 @@ func (h *RedirectHandler) VerifyPassword(w http.ResponseWriter, r *http.Request)
 			renderStatusPage(w, http.StatusForbidden, "Limit Aşıldı", "⚠️", "Maksimum tıklanma sınırına ulaşıldı.")
 			return
 		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		// Güvenlik: İç hata detaylarını kullanıcıya sızdırma
+		http.Error(w, "Sistem Hatası", http.StatusInternalServerError)
 		return
 	}
 

@@ -110,15 +110,13 @@ func (h *MCPHandler) extractUser(r *http.Request) (*model.User, string) {
 // OPTIONS /mcp -> CORS preflight yanıtı döner.
 // HEAD /mcp -> Anında 200 OK döner.
 func (h *MCPHandler) HandleUnified(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-	} else {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-	}
+	// CORS: MCP uç noktaları her kaynaktan erişilebilir olmalıdır.
+	// Güvenlik: Origin yansıtma (reflection) yerine sabit wildcard kullanılır;
+	// bu sayede credential-reflection saldırıları önlenir.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept, *")
-	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -174,15 +172,10 @@ func (h *MCPHandler) HandleUnified(w http.ResponseWriter, r *http.Request) {
 
 // HandleSSE AI istemcileri (Claude Code, Cursor, Gemini, Claude Desktop vb.) için SSE akışını başlatır.
 func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-	} else {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept, *")
-	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -195,6 +188,17 @@ func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, apiKey := h.extractUser(r)
+
+	// Güvenlik: Eşzamanlı SSE oturum sayısını sınırla (bellek tüketimi DoS koruması)
+	sessionCount := 0
+	h.sessions.Range(func(_, _ interface{}) bool {
+		sessionCount++
+		return sessionCount < 1000
+	})
+	if sessionCount >= 1000 {
+		http.Error(w, "Maksimum eşzamanlı oturum sınırına ulaşıldı", http.StatusServiceUnavailable)
+		return
+	}
 
 	sessionBytes := make([]byte, 16)
 	_, _ = rand.Read(sessionBytes)
@@ -216,14 +220,11 @@ func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// İstemciye mesaj gönderim endpoint URL'ini bildir (api_key parametresini koru)
-	queryParts := []string{fmt.Sprintf("sessionId=%s", sessionID)}
-	if apiKey != "" {
-		queryParts = append(queryParts, fmt.Sprintf("api_key=%s", apiKey))
-	} else if r.URL.RawQuery != "" {
-		queryParts = append(queryParts, r.URL.RawQuery)
-	}
-	endpointQuery := strings.Join(queryParts, "&")
+	// İstemciye mesaj gönderim endpoint URL'ini bildir
+	// Güvenlik: API anahtarı URL query parametresine eklenmez; oturum (session) zaten
+	// kullanıcı bağlamını taşır. URL'de anahtar bulunması log, referer ve tarayıcı
+	// geçmişi üzerinden sızıntı riski oluşturur.
+	endpointQuery := fmt.Sprintf("sessionId=%s", sessionID)
 
 	var endpointURL string
 	if config.GlobalConfig != nil && config.GlobalConfig.BaseURL != "" {
@@ -253,15 +254,10 @@ func (h *MCPHandler) HandleSSE(w http.ResponseWriter, r *http.Request) {
 
 // HandleMessage SSE oturumu üzerinden gelen veya doğrudan POST edilen JSON-RPC isteklerini karşılar.
 func (h *MCPHandler) HandleMessage(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-	} else {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept, *")
-	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization, X-API-KEY, Location")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-KEY, Accept")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
