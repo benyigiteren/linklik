@@ -24,14 +24,52 @@
 </p>
 
 <p align="center">
+  <a href="#-10-saniyede-h%C4%B1zl%C4%B1-ba%C5%9Flang%C4%B1%C3%A7-quick-start"><strong>Hızlı Başlangıç</strong></a> •
   <a href="#-neden-linklik">Neden Linklik?</a> •
   <a href="#-temel-yetkinlikler">Özellikler</a> •
   <a href="#-siber-g%C3%BCvenlik--dayan%C4%B1kl%C4%B1l%C4%B1k-mimarisi">Güvenlik</a> •
-  <a href="#-h%C4%B1zl%C4%B1-ba%C5%9Flang%C4%B1%C3%A7">Hızlı Başlangıç</a> •
   <a href="#-model-context-protocol-mcp-ai-ajanlar%C4%B1">MCP & AI</a> •
   <a href="#-rest-api-referans%C4%B1">REST API</a> •
   <a href="#-konfig%C3%BCrasyon">Konfigürasyon</a>
 </p>
+
+---
+
+## ⚡ 10 Saniyede Hızlı Başlangıç (Quick Start)
+
+Linklik'i sunucunuzda veya yerel ortamınızda saniyeler içinde çalıştırmak için hazır **GHCR (GitHub Container Registry)** imajını tek bir komutla ayağa kaldırabilirsiniz:
+
+### 🐳 Seçenek 1: Tek Komutla Docker Run (GHCR İmajı)
+
+```bash
+docker run -d \
+  --name linklik \
+  -p 8080:8080 \
+  -v linklik_data:/app/data \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
+  -e BASE_URL="http://localhost:8080" \
+  --restart unless-stopped \
+  ghcr.io/benyigiteren/linklik:latest
+```
+
+> **🎉 Kurulum Tamamlandı:** Tarayıcınızda `http://localhost:8080` adresine gidin. Sistem otomatik olarak sizi `/setup` sihirbazına yönlendirecek ve ilk Superadmin hesabınızı güvenle oluşturacaktır.
+
+### 📦 Seçenek 2: Klonlamadan Tek Komutla Docker Compose
+
+```bash
+curl -sSL https://raw.githubusercontent.com/benyigiteren/linklik/main/docker-compose.yml -o docker-compose.yml && \
+echo "JWT_SECRET=$(openssl rand -hex 32)" > .env && \
+docker compose up -d
+```
+
+### 🛠️ Seçenek 3: Depoyu Klonlayarak Başlatma
+
+```bash
+git clone https://github.com/benyigiteren/linklik.git
+cd linklik
+cp .env.example .env
+docker compose up -d
+```
 
 ---
 
@@ -124,27 +162,9 @@ Linklik'in tek başına derlenmiş yalın mimarisi, geleneksel alternatiflere g�
 
 ---
 
-## 🚀 Hızlı Başlangıç
+## 🛠️ Yerel Geliştirme & Kaynak Koddan Derleme (Native Go)
 
-### Seçenek 1: Docker Compose ile (Önerilen)
-
-En kolay ve güvenli kurulum yöntemi Docker Compose'dur:
-
-```bash
-# 1. Depoyu klonlayın
-git clone https://github.com/benyigiteren/linklik.git
-cd linklik
-
-# 2. Örnek ortam değişkenlerini kopyalayın ve JWT_SECRET belirleyin
-cp .env.example .env
-
-# 3. Konteyneri başlatın
-docker compose up -d --build
-```
-
-Sunucunuz `http://localhost:8080` adresinde hazır! Tarayıcınızda açtığınızda otomatik olarak `/setup` sihirbazına yönlendirileceksiniz.
-
-### Seçenek 2: Kaynak Koddan Derleme (Native Go)
+Konteyner kullanmadan doğrudan kaynak kod üzerinden geliştirmek veya ikili dosya derlemek için:
 
 Sisteminizde Go (1.22+) kuruluysa:
 
